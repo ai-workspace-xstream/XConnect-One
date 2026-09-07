@@ -63,9 +63,9 @@ type desktopBackend interface {
 	LoopbackOwned(processIdentity, string) (bool, error)
 }
 
-// Desktop applies the external Xray and WireGuard Linux runtime as one
-// transaction. The backend is injectable so tests never start processes or
-// mutate host networking.
+// Desktop applies the external Xray and WireGuard runtime as one transaction.
+// Linux and macOS provide their own host backend; the backend is injectable so
+// tests never start processes or mutate host networking.
 type Desktop struct {
 	dir              string
 	backend          desktopBackend
@@ -75,6 +75,13 @@ type Desktop struct {
 }
 
 func NewLinuxDesktop(stateDirectory string) *Desktop {
+	return newDesktop(stateDirectory, newOSDesktopBackend())
+}
+
+// NewMacOSDesktop runs the same controlled-client lifecycle through the
+// macOS external Xray/WireGuard toolchain. It is intentionally a CLI runtime,
+// independent of the optional XConnect APP plugin host.
+func NewMacOSDesktop(stateDirectory string) *Desktop {
 	return newDesktop(stateDirectory, newOSDesktopBackend())
 }
 

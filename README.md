@@ -1,5 +1,16 @@
 # XConnect-One
 
+XConnect-One is the independently released controlled-endpoint client for the
+XConnect Zero Trust network. It receives a device-bound configuration from the
+XConnect Zero API in `accounts`, generates protected local WireGuard/Xray
+configuration, starts the client data plane, and verifies local readiness before
+acknowledging the applied generation.
+
+XConnect Zero owns the control plane and `portal` owns its WebUI. XConnect APP
+remains independent: it may optionally invoke the versioned `app-bridge` plugin
+interface, but it does not own One's CLI, protocol state machine, credentials,
+or private-network runtime.
+
 Independent Go CLI for a private WireGuard overlay carried over an external
 Xray VLESS/TLS connection. Module: `github.com/ai-workspace-xstream/XConnect-One`.
 This repository contains no Flutter app, FFI bridge, embedded Xray, or dependency

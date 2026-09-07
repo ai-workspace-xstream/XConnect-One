@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://xconnect.one/integrations/xconnect-app-bridge-v1.schema.json",
+  "title": "XConnect One App Bridge v1",
+  "description": "One JSON object per local stdio line. Request and response messages are distinct schemas documented in xconnect-app-bridge-v1.md.",
+  "type": "object",
+  "required": ["protocol_version", "request_id", "method", "params"],
+  "additionalProperties": false,
+  "properties": {
+    "protocol_version": { "const": "1" },
+    "request_id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[^\\r\\n\\u0000]+$" },
+    "method": { "enum": ["negotiate", "join", "sync", "status", "leave", "diagnose"] },
+    "params": { "type": "object" }
+  }
+}

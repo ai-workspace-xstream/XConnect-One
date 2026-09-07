@@ -63,6 +63,11 @@ The gateway must accept the issued VLESS identity and forward its UDP traffic
 to WireGuard, with this device's WireGuard public key, address, return routes
 and access policy provisioned. This repository does not deploy either service.
 
+The macOS controlled-client composition boundary is documented in
+[docs/macos-controlled-client-integration.md](docs/macos-controlled-client-integration.md).
+It keeps One independent while allowing XConnect APP to provide the
+privileged Packet Tunnel/VLESS egress.
+
 ## Enroll, sync, and connect
 
 Run these commands on the Linux host after installing the built binary as

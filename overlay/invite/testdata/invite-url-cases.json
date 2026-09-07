@@ -1,0 +1,86 @@
+[
+  {
+    "name": "canonical percent-encoded controller",
+    "url": "xconnect://join/xjt_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA?controller=https%3A%2F%2Faccounts.example",
+    "mobile_valid": true,
+    "cli_dev_valid": true
+  },
+  {
+    "name": "canonical plain controller",
+    "url": "xconnect://join/xjt_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA?controller=https://accounts.example",
+    "mobile_valid": true,
+    "cli_dev_valid": true
+  },
+  {
+    "name": "non-canonical base64url token",
+    "url": "xconnect://join/xjt_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB?controller=https%3A%2F%2Faccounts.example",
+    "mobile_valid": false,
+    "cli_dev_valid": false
+  },
+  {
+    "name": "leading whitespace",
+    "url": " xconnect://join/xjt_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA?controller=https%3A%2F%2Faccounts.example",
+    "mobile_valid": false,
+    "cli_dev_valid": false
+  },
+  {
+    "name": "userinfo",
+    "url": "xconnect://user@join/xjt_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA?controller=https%3A%2F%2Faccounts.example",
+    "mobile_valid": false,
+    "cli_dev_valid": false
+  },
+  {
+    "name": "fragment",
+    "url": "xconnect://join/xjt_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA?controller=https%3A%2F%2Faccounts.example#secret",
+    "mobile_valid": false,
+    "cli_dev_valid": false
+  },
+  {
+    "name": "extra path",
+    "url": "xconnect://join/xjt_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/extra?controller=https%3A%2F%2Faccounts.example",
+    "mobile_valid": false,
+    "cli_dev_valid": false
+  },
+  {
+    "name": "percent encoded token path",
+    "url": "xconnect://join/%78jt_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA?controller=https%3A%2F%2Faccounts.example",
+    "mobile_valid": false,
+    "cli_dev_valid": false
+  },
+  {
+    "name": "duplicate controller",
+    "url": "xconnect://join/xjt_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA?controller=https%3A%2F%2Faccounts.example&controller=https%3A%2F%2Fother.example",
+    "mobile_valid": false,
+    "cli_dev_valid": false
+  },
+  {
+    "name": "unknown query",
+    "url": "xconnect://join/xjt_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA?controller=https%3A%2F%2Faccounts.example&token=hidden",
+    "mobile_valid": false,
+    "cli_dev_valid": false
+  },
+  {
+    "name": "controller userinfo",
+    "url": "xconnect://join/xjt_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA?controller=https%3A%2F%2Fuser%40accounts.example",
+    "mobile_valid": false,
+    "cli_dev_valid": false
+  },
+  {
+    "name": "controller query",
+    "url": "xconnect://join/xjt_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA?controller=https%3A%2F%2Faccounts.example%3Fx%3D1",
+    "mobile_valid": false,
+    "cli_dev_valid": false
+  },
+  {
+    "name": "production HTTP controller",
+    "url": "xconnect://join/xjt_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA?controller=http%3A%2F%2Faccounts.example",
+    "mobile_valid": false,
+    "cli_dev_valid": false
+  },
+  {
+    "name": "localhost dev is CLI-only",
+    "url": "xconnect://join/xjt_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA?controller=http%3A%2F%2Flocalhost%3A8080",
+    "mobile_valid": false,
+    "cli_dev_valid": true
+  }
+]

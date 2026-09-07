@@ -1,0 +1,54 @@
+name: Test and build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Check formatting
+        run: test -z "$(gofmt -l cmd overlay)"
+      - run: go vet ./...
+      - run: go test -race -count=1 ./...
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Build Linux CLI
+        env:
+          CGO_ENABLED: '0'
+          GOOS: linux
+          GOARCH: ${{ matrix.arch }}
+        run: go build -trimpath -o dist/xconnect-linux-${{ matrix.arch }} ./cmd/xconnect
+      - uses: actions/upload-artifact@v4
+        with:
+          name: xconnect-linux-${{ matrix.arch }}
+          path: |
+            dist/xconnect-linux-${{ matrix.arch }}
+            LICENSE
+            NOTICE
+            README.md
+            PROVENANCE.md

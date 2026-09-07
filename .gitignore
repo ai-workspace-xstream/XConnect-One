@@ -1,0 +1,5 @@
+/dist/
+/.xconnect-one/
+*.test
+/coverage.out
+.DS_Store

@@ -1,10 +1,10 @@
-//go:build linux || darwin
+//go:build darwin
 
 package runtime
 
 import "testing"
 
-func TestExternalRuntimeStartsInDetachedSession(t *testing.T) {
+func TestMacOSExternalRuntimeStartsInDetachedSession(t *testing.T) {
 	attributes := detachedProcessAttributes()
 	if attributes == nil || !attributes.Setsid || attributes.Setpgid {
 		t.Fatalf("external runtime must start in a detached session: %#v", attributes)

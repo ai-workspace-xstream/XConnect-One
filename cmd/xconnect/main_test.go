@@ -1,4 +1,4 @@
-// Modified for XConnect-One: standalone module imports.
+// Modified for XConnect-One: standalone imports and platform-aware lifecycle tests.
 package main
 
 import (
@@ -133,6 +133,13 @@ func TestCLIInviteJoinUsesEnrollmentWithoutAccountTokenOrSecretOutput(t *testing
 }
 
 func TestProductionJoinFailsClosedWithoutPlatformRuntimeAndDoesNotAck(t *testing.T) {
+	// Never depend on installed tunnel tools or allow this production-path test
+	// to mutate networking when run as root on a provisioned Linux host.
+	t.Setenv("PATH", t.TempDir())
+	wantCode := fault.CodeRuntimeUnavailable
+	if runtime.GOOS == "linux" {
+		wantCode = fault.CodeRuntimeDependency
+	}
 	var ackCalls atomic.Int32
 	server := newCLITestServer(t, false, &ackCalls)
 	stateDirectory := t.TempDir()
@@ -146,7 +153,7 @@ func TestProductionJoinFailsClosedWithoutPlatformRuntimeAndDoesNotAck(t *testing
 		"--state-dir", stateDirectory,
 		"--device-id", "dev_cli",
 	}, &stdout, &stderr, server.Client())
-	if fault.Code(err) != fault.CodeRuntimeUnavailable {
+	if fault.Code(err) != wantCode {
 		t.Fatalf("error code = %q, err=%v", fault.Code(err), err)
 	}
 	if ackCalls.Load() != 0 {
@@ -156,7 +163,7 @@ func TestProductionJoinFailsClosedWithoutPlatformRuntimeAndDoesNotAck(t *testing
 	if loadErr != nil {
 		t.Fatalf("load checkpoint: %v", loadErr)
 	}
-	if checkpoint.Phase != state.PhaseConfigFetched || checkpoint.LastErrorCode != fault.CodeRuntimeUnavailable {
+	if checkpoint.Phase != state.PhaseConfigFetched || checkpoint.LastErrorCode != wantCode {
 		t.Fatalf("unexpected checkpoint after unavailable runtime: %#v", checkpoint)
 	}
 }

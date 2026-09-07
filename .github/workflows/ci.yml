@@ -37,18 +37,37 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
-      - name: Build Linux CLI
+      - name: Build Linux CLI and lab controller
         env:
           CGO_ENABLED: '0'
           GOOS: linux
           GOARCH: ${{ matrix.arch }}
-        run: go build -trimpath -o dist/xconnect-linux-${{ matrix.arch }} ./cmd/xconnect
+        run: |
+          mkdir -p dist
+          go build -trimpath -o dist/xconnect-linux-${{ matrix.arch }} ./cmd/xconnect
+          go build -trimpath -o dist/xconnect-zero-lab-linux-${{ matrix.arch }} ./cmd/xconnect-zero-lab
       - uses: actions/upload-artifact@v4
         with:
-          name: xconnect-linux-${{ matrix.arch }}
+          name: xconnect-release-linux-${{ matrix.arch }}
           path: |
             dist/xconnect-linux-${{ matrix.arch }}
-            LICENSE
-            NOTICE
-            README.md
-            PROVENANCE.md
+            dist/xconnect-zero-lab-linux-${{ matrix.arch }}
+
+  release:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [test, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: xconnect-release-linux-*
+          path: dist
+          merge-multiple: true
+      - name: Generate release checksums
+        run: sha256sum dist/* > dist/SHA256SUMS
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" dist/* --title "XConnect-One ${GITHUB_REF_NAME}" --generate-notes

@@ -29,15 +29,25 @@ const (
 )
 
 type Network struct {
-	ID          string `json:"id"`
-	DisplayName string `json:"display_name"`
-	CIDR        string `json:"cidr"`
+	ID                  string    `json:"id"`
+	DisplayName         string    `json:"display_name"`
+	CIDR                string    `json:"cidr"`
+	GatewayID           string    `json:"gateway_id"`
+	GatewayWireGuardKey string    `json:"gateway_wireguard_public_key"`
+	GatewayEndpointHost string    `json:"gateway_endpoint_host"`
+	GatewayEndpointPort int       `json:"gateway_endpoint_port"`
+	TransportServerName string    `json:"transport_server_name"`
+	TransportPort       int       `json:"transport_port"`
+	TransportAuthID     string    `json:"transport_auth_id"`
+	CreatedAt           time.Time `json:"created_at"`
+	UpdatedAt           time.Time `json:"updated_at"`
 }
 
 type Device struct {
 	ID                 string     `json:"id"`
 	UserID             string     `json:"user_id,omitempty"`
 	NetworkID          string     `json:"network_id"`
+	Role               string     `json:"role,omitempty"`
 	Name               string     `json:"name"`
 	Platform           string     `json:"platform"`
 	Hostname           string     `json:"hostname"`

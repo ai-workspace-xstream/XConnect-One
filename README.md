@@ -36,11 +36,14 @@ go vet ./...
 go build -trimpath -o dist/xconnect ./cmd/xconnect
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o dist/xconnect-linux-amd64 ./cmd/xconnect
 CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -o dist/xconnect-linux-arm64 ./cmd/xconnect
+CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath -o dist/xconnect-macos-arm64 ./cmd/xconnect
+CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -trimpath -o dist/xconnect-macos-amd64 ./cmd/xconnect
 ```
 
 The CI workflow tests on Linux and macOS, runs the race detector and vet, and
-uploads Linux amd64/arm64 binaries. Tests use HTTP fixtures and injected runtime
-backends; they do not establish a live VPN or change the host network.
+publishes Linux and macOS controlled-client binaries. Tests use HTTP fixtures
+and injected runtime backends; they do not establish a live VPN or change the
+host network.
 
 ## Linux prerequisites
 
@@ -197,9 +200,12 @@ owned-resource cleanup. Never edit generated files while the runtime is active.
   Failed or interrupted startup can leave an unowned partial interface requiring
   manual inspection; automatic deletion is deliberately refused. `wg-quick`
   itself may perform its own failure cleanup.
-- macOS/Windows/mobile tunnel hosts are not shipped. The CLI can build on macOS,
-  but its tunnel runtime deliberately reports that a protected host is required.
-  macOS credential support is retained; it is not a macOS VPN implementation.
+- macOS is a supported external-runtime controlled-client CLI. It requires a
+  root-launched Xray binary plus compatible `wg`, `wg-quick`, and WireGuard
+  userspace/kernel support (for example the supported Homebrew toolchain). It
+  does not use XConnect APP state. The APP may optionally host the same CLI as
+  a plugin, but that plugin mode does not change the standalone CLI contract.
+- Windows/mobile tunnel hosts are not shipped.
 - Real Linux Xray/WireGuard execution and end-to-end networking were not tested
   during extraction on the macOS development host. Passing tests and Linux
   cross-builds are not live-network certification. Runtime subprocess output

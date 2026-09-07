@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"os"
@@ -54,19 +55,21 @@ func (b *osDesktopBackend) Run(ctx context.Context, name string, args ...string)
 }
 
 func (b *osDesktopBackend) Start(executable string, args []string, revision, configDigest string) (processIdentity, error) {
-	command := exec.Command(executable, args...)
+	unit := fmt.Sprintf("xconnect-one-xray-%d-%d", os.Getpid(), time.Now().UnixNano())
+	command := exec.Command("systemd-run", systemdRunArguments(unit, executable, args)...)
 	command.Stdin = nil
 	command.Stdout = io.Discard
 	command.Stderr = io.Discard
-	// The CLI is commonly invoked through a short-lived SSH or sudo session.
-	// A separate process group is not enough: the external runtime would still
-	// belong to that login session and receive its hangup when `xconnect` exits.
-	command.SysProcAttr = detachedProcessAttributes()
-	if err := command.Start(); err != nil {
+	if err := command.Run(); err != nil {
+		return processIdentity{}, err
+	}
+	pid, err := systemdMainPID(unit, 3*time.Second)
+	if err != nil {
+		_ = exec.Command("systemctl", "stop", unit).Run()
 		return processIdentity{}, err
 	}
 	identity := processIdentity{
-		PID:          command.Process.Pid,
+		PID:          pid,
 		Executable:   canonicalPath(executable),
 		ConfigPath:   configArgument(args),
 		ConfigSHA256: configDigest,
@@ -74,20 +77,41 @@ func (b *osDesktopBackend) Start(executable string, args []string, revision, con
 	}
 	startToken, err := linuxProcessStartToken(identity.PID)
 	if err != nil {
-		_ = command.Process.Kill()
-		_ = command.Process.Release()
+		_ = exec.Command("systemctl", "stop", unit).Run()
 		return processIdentity{}, err
 	}
 	identity.StartToken = startToken
-	if err := command.Process.Release(); err != nil {
-		_ = command.Process.Kill()
-		return processIdentity{}, err
-	}
 	return identity, nil
 }
 
-func detachedProcessAttributes() *syscall.SysProcAttr {
-	return &syscall.SysProcAttr{Setsid: true}
+func systemdRunArguments(unit, executable string, args []string) []string {
+	result := []string{
+		"--unit", unit,
+		"--collect",
+		"--quiet",
+		"--property=Type=exec",
+		"--property=Restart=no",
+		"--property=StandardOutput=null",
+		"--property=StandardError=null",
+		"--",
+		executable,
+	}
+	return append(result, args...)
+}
+
+func systemdMainPID(unit string, timeout time.Duration) (int, error) {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		raw, err := exec.Command("systemctl", "show", "--property=MainPID", "--value", unit).Output()
+		if err == nil {
+			pid, parseErr := strconv.Atoi(strings.TrimSpace(string(raw)))
+			if parseErr == nil && pid > 0 {
+				return pid, nil
+			}
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	return 0, errors.New("systemd runtime did not publish a main PID")
 }
 
 func (b *osDesktopBackend) ProcessAlive(identity processIdentity) (bool, error) {

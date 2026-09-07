@@ -61,7 +61,7 @@ func (b *osDesktopBackend) Start(executable string, args []string, revision, con
 	command.Stdin = nil
 	command.Stdout = io.Discard
 	command.Stderr = io.Discard
-	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	command.SysProcAttr = detachedProcessAttributes()
 	if err := command.Start(); err != nil {
 		return processIdentity{}, err
 	}
@@ -84,6 +84,10 @@ func (b *osDesktopBackend) Start(executable string, args []string, revision, con
 		return processIdentity{}, err
 	}
 	return identity, nil
+}
+
+func detachedProcessAttributes() *syscall.SysProcAttr {
+	return &syscall.SysProcAttr{Setsid: true}
 }
 
 func (b *osDesktopBackend) ProcessAlive(identity processIdentity) (bool, error) {

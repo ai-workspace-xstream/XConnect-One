@@ -58,7 +58,10 @@ func (b *osDesktopBackend) Start(executable string, args []string, revision, con
 	command.Stdin = nil
 	command.Stdout = io.Discard
 	command.Stderr = io.Discard
-	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	// The CLI is commonly invoked through a short-lived SSH or sudo session.
+	// A separate process group is not enough: the external runtime would still
+	// belong to that login session and receive its hangup when `xconnect` exits.
+	command.SysProcAttr = detachedProcessAttributes()
 	if err := command.Start(); err != nil {
 		return processIdentity{}, err
 	}
@@ -81,6 +84,10 @@ func (b *osDesktopBackend) Start(executable string, args []string, revision, con
 		return processIdentity{}, err
 	}
 	return identity, nil
+}
+
+func detachedProcessAttributes() *syscall.SysProcAttr {
+	return &syscall.SysProcAttr{Setsid: true}
 }
 
 func (b *osDesktopBackend) ProcessAlive(identity processIdentity) (bool, error) {

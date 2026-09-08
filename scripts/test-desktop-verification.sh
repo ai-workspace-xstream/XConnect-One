@@ -135,6 +135,19 @@ grep -Fq 'result=PASS' "$TEST_DIR/pass.out"
 ! grep -Fq 'run=34196049126' "$TEST_DIR/pass.out" "$TEST_DIR/pass.err"
 
 set +e
+PATH="$FAKE_BIN:/usr/bin:/bin" "$VERIFY_SCRIPT" \
+    --cli "$TEST_DIR/fake-cli" --state-dir "$TEST_DIR" \
+    --expected-device-id dev_desktop --expected-network-id net_uat \
+    --gateway-wg-public-key "$valid_key" \
+    --overlay-target 'http://10.77.0.42:8080/uat/run' \
+    --http-expected-marker 'wrong-run
+run=34196049126' >"$TEST_DIR/multiline.out" 2>"$TEST_DIR/multiline.err"
+multiline_code=$?
+set -e
+[ "$multiline_code" -eq 1 ]
+grep -Fq 'check=input status=FAIL' "$TEST_DIR/multiline.out"
+
+set +e
 CURL_SUBSTRING=1 PATH="$FAKE_BIN:/usr/bin:/bin" "$VERIFY_SCRIPT" \
     --cli "$TEST_DIR/fake-cli" --state-dir "$TEST_DIR" \
     --expected-device-id dev_desktop --expected-network-id net_uat \

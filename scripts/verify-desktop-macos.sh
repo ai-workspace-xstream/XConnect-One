@@ -205,8 +205,13 @@ validate_inputs() {
         return 1
     }
     case "$HTTP_MARKER" in
-        *'\r'*|*'\n'*) printf 'verification failed at check=input\n' >&2; return 1 ;;
+        *'
+'*) printf 'verification failed at check=input\n' >&2; return 1 ;;
     esac
+    if printf '%s' "$HTTP_MARKER" | LC_ALL=C grep -q '[[:cntrl:]]'; then
+        printf 'verification failed at check=input\n' >&2
+        return 1
+    fi
     marker_bytes=$(printf '%s' "$HTTP_MARKER" | wc -c | tr -d '[:space:]')
     is_uint "$marker_bytes" && [ "$marker_bytes" -le 4096 ] 2>/dev/null || {
         printf 'verification failed at check=input\n' >&2

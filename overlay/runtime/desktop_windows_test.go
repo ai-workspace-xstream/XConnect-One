@@ -3,10 +3,13 @@
 package runtime
 
 import (
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+
+	"golang.org/x/sys/windows"
 )
 
 func TestWindowsWireGuardServiceArgsUseOfficialTunnelServiceCLI(t *testing.T) {
@@ -56,5 +59,22 @@ func TestMatchesWindowsPrivateDACL(t *testing.T) {
 	}
 	if !strings.Contains(valid, owner) {
 		t.Fatal("test descriptor must contain the owner SID")
+	}
+}
+
+func TestWindowsPrivateACLReadbackIsTrusted(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "runtime.json")
+	if err := os.WriteFile(path, []byte("test"), 0o600); err != nil {
+		t.Fatalf("write runtime artifact: %v", err)
+	}
+	if err := setWindowsPrivateACL(path); err != nil {
+		t.Fatalf("set private ACL: %v", err)
+	}
+	descriptor, err := windows.GetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION|windows.OWNER_SECURITY_INFORMATION)
+	if err != nil {
+		t.Fatalf("read private ACL: %v", err)
+	}
+	if !hasWindowsPrivateACL(path) {
+		t.Fatalf("private ACL readback was not trusted: %q", descriptor.String())
 	}
 }

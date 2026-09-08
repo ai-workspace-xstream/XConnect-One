@@ -12,9 +12,8 @@ network, or authorize a device.
 2. XConnect Gateway is an independent Linux relay/service. It owns its local
    Gateway Xray and WireGuard runtime.
 3. XConnect One is an independent Linux, macOS and Windows controlled-client
-   CLI. Linux and Windows own the configuration and lifecycle of their external
-   Xray and WireGuard processes. macOS owns its WireGuard lifecycle and uses an
-   explicit XConnect APP transport-provider contract.
+   CLI. It owns the configuration and lifecycle of its external Xray tproxy and
+   WireGuard processes on every supported desktop platform.
 4. Xray is an external runtime, not XConnect One source code, a bundled
    library, or a separate XConnect One product. One creates and validates a
    private config for its own process; it must not modify another application's
@@ -33,8 +32,7 @@ network, or authorize a device.
 | Zero `accounts` | network/device/policy records, registration approval, signed Gateway and One configs, sessions and ACK records | Xray or WireGuard processes, device private keys |
 | Zero `portal` | owner-scoped management UI and BFF requests | credentials, private keys, host runtime execution |
 | XConnect Gateway | Gateway enrollment, signed config verification, Gateway Xray/WireGuard files and lifecycle, peer table and ACK | Portal UI, Zero signing authority, One private keys |
-| XConnect One (Linux/Windows) | registration/join/sync, signed config verification, its WireGuard key/config/lifecycle, its external Xray adapter config/lifecycle and ACK | Gateway role, Zero policy/signing, XConnect APP state or processes |
-| XConnect One (macOS) | registration/join/sync, signed config verification, its WireGuard key/config/lifecycle, transport-provider binding and ACK | Gateway role, Zero policy/signing, APP Xray/SOCKS/TUN state or process lifecycle |
+| XConnect One | registration/join/sync, signed config verification, its WireGuard key/config/lifecycle, external Xray tproxy config/lifecycle and ACK | Gateway role, Zero policy/signing, XConnect APP state or processes |
 | External Xray | VLESS/TLS/XUDP transport for the process started by its owner | Zero data model, peer authorization, address allocation |
 | WireGuard | encrypted overlay interface, peer keys, addresses and allowed routes | VLESS transport, policy issuance, identity approval |
 | XConnect APP | its own UI, TUN, Xray/SOCKS/VLESS runtime and plugin host | One's state directory, One's credentials and One-owned interfaces |
@@ -84,8 +82,8 @@ The same control-plane CLI contract is used on Linux, macOS and Windows:
 
 ```text
 register or join → sync signed config → verify and compile
-                 → bind the platform transport provider + WireGuard config
-                 → start/verify WireGuard → ACK
+                 → render local Xray tproxy + WireGuard config
+                 → validate/start Xray → start/verify WireGuard → ACK
 ```
 
 `register` creates only a pending request and private local state. Before owner
@@ -99,9 +97,8 @@ One's WireGuard peer never uses the public Gateway WireGuard port directly:
 Endpoint = 127.0.0.1:51830
 ```
 
-On Linux and Windows this loopback endpoint belongs to One's external tproxy
-process. On macOS it belongs to the APP transport provider and must be obtained
-through its explicit plugin contract. It is never a public listener.
+This loopback endpoint belongs to One's external tproxy process on Linux,
+macOS and Windows. It is never a public listener or an XConnect APP endpoint.
 
 ## WireGuard-over-VLESS data path
 
@@ -128,56 +125,27 @@ it started, then starts WireGuard. On failure it rolls back only its own Xray
 process and WireGuard interface. `down` and `leave` do not stop or delete any
 APP-owned or third-party runtime.
 
-## Platform transport profiles
+## Platform transport profile
 
-The signed Zero config always binds the One WireGuard peer to a loopback relay.
-Selection of the local transport provider is an explicit local deployment
-choice; it is not a Portal setting and must not leak APP credentials into Zero.
-
-### 1. Linux and Windows: independent external Xray tproxy
-
-One writes and starts its protected external `xray/tproxy` process. It owns the
-local UDP relay and uses the signed VLESS/TLS details to reach the Gateway.
-This is the Linux and Windows baseline.
+Linux, macOS and Windows use the same independent data-plane pattern:
 
 ```text
-WireGuard → One-owned Xray tproxy → VLESS/TLS/XUDP → Gateway
+WireGuard → One-owned external Xray tproxy → VLESS/TLS/XUDP → Gateway
 ```
 
-### 2. macOS: XConnect APP transport provider
+One writes and starts its protected external `xray/tproxy` process, owns the
+local UDP relay, and uses signed VLESS/TLS details to reach the Gateway. The
+runtime remains external software, but its process and files belong to One's
+explicit state directory.
 
-On macOS, the APP plugin owns the local UDP relay and its Xray/SOCKS5/TUN
-processes. One does not render or start an Xray process. It binds its WireGuard
-peer to the loopback relay endpoint returned by the versioned APP provider.
+## Future XConnect APP plugin
 
-```text
-WireGuard → APP-owned local UDP relay → APP Xray/SOCKS5 or TUN → Gateway
-```
-
-The provider must be loopback-only, have a stable health/lifecycle signal, and
-bind the exact signed Gateway transport without exposing One credentials. The
-APP must avoid routing its own transport recursively; that remains APP-owned
-route policy. One does not start, stop, configure or inspect the APP's Xray,
-SOCKS5 or TUN process.
-
-An APP SOCKS5 listener alone cannot be the WireGuard peer endpoint: WireGuard
-sends raw UDP and does not implement SOCKS5 UDP ASSOCIATE. The macOS provider
-therefore includes the APP-owned UDP-to-SOCKS5/VLESS adaptation behind its
-loopback relay. Pure SOCKS5 support without that UDP adapter is insufficient.
-
-## XConnect APP composition
-
-XConnect APP is outside the Linux/Windows required path and is the explicit
-macOS transport provider. A One plugin may start the released CLI with a
-dedicated state directory using the documented local bridge protocol. This does
-not merge processes or state.
-
-The macOS provider contract must add, before this mode can ship: a protocol
-version, loopback relay endpoint, provider health state, an apply/withdraw
-operation bound to a signed One config generation, and explicit ownership of
-the relay process. It must never expose APP credentials, raw configuration or
-private keys to One. Current releases have not implemented this provider
-contract; v0.1.9 still uses the independent external tproxy path on macOS.
+XConnect APP is not a current transport dependency. A future plugin may launch
+the released One CLI through the documented local bridge with a dedicated state
+directory. The plugin must preserve the same Zero enrollment and signed-config
+contract, and must not merge or share APP and One process ownership, credentials
+or state. Any future APP TUN/SOCKS5 composition is a separately versioned
+extension, not a replacement for the standalone three-platform One data plane.
 
 ## Acceptance evidence
 

@@ -110,10 +110,9 @@ register 或 join
 
 ## 7. 平台数据面分层
 
-### Linux / Windows：独立 One CLI 数据面
+### Linux / macOS / Windows：独立 One CLI 数据面
 
-Linux 与 Windows 保持独立运行能力。One 生成并管理外部 `xray/tproxy` 和
-WireGuard：
+三端保持独立运行能力。One 生成并管理外部 `xray/tproxy` 和 WireGuard：
 
 ```text
 One WireGuard
@@ -129,66 +128,13 @@ Gateway WireGuard
 文件和 loopback relay 由 One 的专有状态目录管理。One 在启动前验证配置，
 启动后验证本地 relay 与 WireGuard 接口，失败时仅回滚自己拥有的资源。
 
-### macOS：逐步复用 XConnect APP transport provider
+## 8. 后续 XConnect APP 插件
 
-macOS 的目标不是让 One 管理 APP 的 Xray，而是让 APP 插件作为 transport
-provider：
+XConnect APP 当前不是 One 的数据面依赖。后续可通过版本化插件启动已发布的 One
+CLI，并使用独立状态目录；不得共享或接管 One 的进程、凭据、私钥和 WireGuard
+接口。APP 的 TUN/SOCKS5 组合属于后续扩展，不替代三平台独立 One 数据面。
 
-```text
-One WireGuard
-  ↓ 加密 UDP
-APP 提供的 loopback UDP relay
-  ↓ APP Xray / SOCKS5 / TUN
-Gateway Xray
-  ↓
-Gateway WireGuard
-```
-
-One 仍负责注册、同步、签名验证、WireGuard 接口和 ACK；APP 负责它自己的
-Xray、SOCKS5、TUN 与对外连接。两边不可共享状态目录、凭据或私钥。
-
-当前版本说明：`v0.1.9` 的 macOS CLI 仍采用独立外部 tproxy 路径。APP
-transport provider 是下一阶段目标，必须在插件协议完成后才能切换，不能提前
-视为已实现。
-
-### 为什么纯 SOCKS5 不够
-
-WireGuard 发出的是原始 UDP，不会实现 SOCKS5 UDP ASSOCIATE。因此 APP 若只
-提供 SOCKS5，不能直接让 WireGuard 把它当 peer Endpoint。APP provider 必须
-在内部提供 UDP→SOCKS5/VLESS 适配，或提供 loopback-only `dokodemo-door` UDP
-relay。One 只连接该 relay，不能读取 APP 配置。
-
-## 8. macOS APP provider 契约（待实现）
-
-在 macOS 切换到 APP 复用前，插件桥接协议需要新增受版本控制的 transport
-provider 契约：
-
-| 字段/操作 | 要求 |
-| --- | --- |
-| 协议版本 | 显式协商，避免旧 APP 静默接受新配置 |
-| relay endpoint | 仅 loopback，返回 `host:port`，不得是公网监听器 |
-| provider health | One 可获得“可用/不可用”状态，但不读取 APP 内部配置 |
-| apply generation | APP 仅接受绑定当前 One signed-config 代次的请求 |
-| withdraw | One 离开时只撤销 One 对该 provider 的绑定，不停止 APP 全局服务 |
-| 所有权 | APP 明确拥有 relay、Xray、SOCKS5、TUN；One 明确拥有 WireGuard 与 One 状态 |
-| 保密 | 不返回 APP 凭据、私钥、完整 Xray 配置或用户账号信息 |
-
-这是一项新增的、版本化插件能力，不允许通过猜测端口、读取 APP 文件或调用未公开
-私有 API 来实现。
-
-## 9. XConnect APP TUN 的位置
-
-即使在 Linux/Windows 独立 tproxy 模式，APP TUN 也可以作为操作系统层的外层
-出口，但它不是 One 配置对象：
-
-```text
-One Xray tproxy → OS 路由 → APP TUN → 外部网络 → Gateway Xray
-```
-
-APP 自己负责防止其上游连接被错误地再次路由回本身。One 不添加 APP 路由、不改
-DNS、不配置 TUN，也不依赖 APP 存在。
-
-## 10. 仓库边界
+## 9. 仓库边界
 
 | 仓库 | 唯一职责 |
 | --- | --- |
@@ -201,18 +147,18 @@ DNS、不配置 TUN，也不依赖 APP 存在。
 | `playbooks` | OS 级 Xray/WireGuard role；不保存控制面业务状态 |
 | `gitops/vpn-overlay` | 非敏感拓扑、版本、规格和环境声明 |
 
-## 11. 分阶段交付
+## 10. 分阶段交付
 
 1. **Gateway + Linux One**：正式 Accounts 预置网络/邀请，Gateway 和 Linux
    One 启动，完成配置同步、ACK、精确 peer 握手、私网 ping/HTTP。
 2. **Windows One**：保持同一 CLI/签名配置语义，使用独立外部 tproxy，完成
    Spot 主机验证。
-3. **macOS 独立兼容验证**：在 APP provider 上线前，保留独立 tproxy 作为兼容
-   路径并完成本机验证。
-4. **macOS APP provider**：先发布版本化 loopback UDP relay 契约，再实现 One
-   的 provider adapter，最后验证 APP 不受破坏、One 私网连通和撤销边界。
+3. **macOS One**：使用与 Linux/Windows 相同的独立外部 tproxy 模式完成本机
+   验证。
+4. **XConnect APP 插件**：后续独立扩展，复用已发布 One CLI，不改变 APP 核心和
+   三平台独立数据面。
 
-## 12. 验收证据
+## 11. 验收证据
 
 | 层级 | 通过证据 |
 | --- | --- |

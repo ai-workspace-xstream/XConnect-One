@@ -5,6 +5,7 @@ package runtime
 import (
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -41,5 +42,19 @@ func TestWindowsWireGuardServiceArgsRejectUnsafeTunnelNames(t *testing.T) {
 func TestWindowsPrivateRuntimeSDDLIsProtectedAndAdministratorBound(t *testing.T) {
 	if windowsPrivateRuntimeSDDL != "D:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;OW)" {
 		t.Fatalf("unexpected runtime SDDL %q", windowsPrivateRuntimeSDDL)
+	}
+}
+
+func TestMatchesWindowsPrivateDACL(t *testing.T) {
+	owner := "S-1-5-21-100-200-300-1001"
+	valid := "O:" + owner + "G:BAD:PAI(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;" + owner + ")"
+	if !matchesWindowsPrivateDACL(valid) {
+		t.Fatal("expected protected DACL with only SYSTEM, Administrators, and owner access to be trusted")
+	}
+	if matchesWindowsPrivateDACL("O:" + owner + "D:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;WD)") {
+		t.Fatal("world-readable DACL must not be trusted")
+	}
+	if !strings.Contains(valid, owner) {
+		t.Fatal("test descriptor must contain the owner SID")
 	}
 }

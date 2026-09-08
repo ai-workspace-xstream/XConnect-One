@@ -580,7 +580,9 @@ func setWindowsPrivateACL(path string) error {
 }
 
 func hasWindowsPrivateACL(path string) bool {
-	securityDescriptor, err := windows.GetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION)
+	// Include the owner: the explicit owner ACE created from `OW` is rendered
+	// as that concrete SID when Windows reads the descriptor back.
+	securityDescriptor, err := windows.GetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION|windows.OWNER_SECURITY_INFORMATION)
 	if err != nil || securityDescriptor == nil {
 		return false
 	}
@@ -593,7 +595,14 @@ func hasWindowsPrivateACL(path string) bool {
 
 func matchesWindowsPrivateDACL(sddl string) bool {
 	// Owner and group sections normally precede `D:` in Windows SDDL.  Compare
-	// the protected DACL itself, not the complete descriptor string.
+	// the protected DACL itself, not the complete descriptor string. Windows
+	// resolves the `OW` placeholder used while creating the ACL to the concrete
+	// owner SID when the descriptor is read back, so that final ACE must match
+	// the descriptor's actual owner rather than the literal `OW` token.
+	owner := windowsSDDLOwner(sddl)
+	if owner == "" {
+		return false
+	}
 	daclOffset := strings.Index(sddl, "D:")
 	if daclOffset < 0 {
 		return false
@@ -604,13 +613,30 @@ func matchesWindowsPrivateDACL(sddl string) bool {
 	}
 	// `AI` records auto-inheritance metadata and does not add a principal.
 	body = strings.TrimPrefix(body, "AI")
-	for _, ace := range []string{"(A;;FA;;;SY)", "(A;;FA;;;BA)", "(A;;FA;;;OW)"} {
+	for _, ace := range []string{
+		"(A;;FA;;;SY)",
+		"(A;;FA;;;BA)",
+		"(A;;FA;;;" + owner + ")",
+	} {
 		if strings.Count(body, ace) != 1 {
 			return false
 		}
 		body = strings.Replace(body, ace, "", 1)
 	}
 	return body == ""
+}
+
+func windowsSDDLOwner(sddl string) string {
+	if !strings.HasPrefix(sddl, "O:") {
+		return ""
+	}
+	end := len(sddl)
+	for _, marker := range []string{"G:", "D:", "S:"} {
+		if index := strings.Index(sddl[2:], marker); index >= 0 && index+2 < end {
+			end = index + 2
+		}
+	}
+	return sddl[2:end]
 }
 
 func sameWindowsPath(left, right string) bool {

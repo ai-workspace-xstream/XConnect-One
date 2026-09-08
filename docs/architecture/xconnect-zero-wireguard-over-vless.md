@@ -56,10 +56,11 @@ signed configuration only after the transport baseline passes.
 
 ## Phase 0: transport-lab automation
 
-The lab creates disposable Linux Gateway and Linux/Windows One nodes with a
-strict TTL. macOS uses an explicitly authorized local or self-hosted runner;
-it cannot be represented truthfully by a GitHub-hosted runner without the
-required administrator operations.
+The lab creates disposable Linux Gateway and Linux One nodes with a strict
+TTL. Windows uses an explicitly authorized LAN host and macOS uses an
+explicitly authorized local or self-hosted runner; neither can be represented
+truthfully by a GitHub-hosted runner without the required administrator
+operations.
 
 1. Every node generates its WireGuard private key locally in its protected
    state directory. The orchestrator exchanges public keys only.
@@ -83,7 +84,7 @@ to logs, artifacts or the Portal.
 | --- | --- | --- |
 | Linux Gateway | VLESS/TLS Xray server, WireGuard, One public peers, private HTTP marker | TCP/TLS listener, interface, exact peer handshakes |
 | Linux One | external `xray/tproxy`, WireGuard, Gateway peer | loopback relay, interface, handshake, ping/HTTP |
-| Windows One | external `xray/tproxy`, WireGuard for Windows, Gateway peer | same as Linux on a disposable Spot node |
+| Windows One | external `xray/tproxy`, WireGuard for Windows, Gateway peer | same as Linux on an authorized LAN host |
 | macOS One | external `xray/tproxy`, `wireguard-go`/WireGuard, Gateway peer | same as Linux with explicit local/admin authorization |
 
 ## Control plane

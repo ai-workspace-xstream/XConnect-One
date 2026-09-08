@@ -60,8 +60,8 @@ One 只执行经过签名验证的配置；让 WireGuard 负责私网身份和�
 
 流水线应按以下顺序执行，所有私钥仅在目标节点的受保护状态目录生成和保存：
 
-1. 创建临时 Gateway、Linux One 和 Windows One；macOS 使用受控的本机/自托管
-   runner。所有云节点有明确 TTL，失败或到期即销毁。
+1. 创建临时 Gateway 和 Linux One；Windows One 使用受控局域网主机，macOS 使用
+   本机/受控 runner。云节点有明确 TTL，失败或到期即销毁。
 2. 每个节点本地生成 WireGuard 密钥对；流水线只读取并交换**公钥**，绝不回传或
    持久化私钥。
 3. Gateway 渲染并启动 TLS/VLESS Xray 服务端、WireGuard 接口和三个 One 的
@@ -81,7 +81,7 @@ VLESS 身份、WireGuard 私钥与实际 peer 配置不进入 GitOps、日志、
 | --- | --- | --- |
 | Gateway（Linux） | Xray VLESS/TLS server、WireGuard、每个 One public peer、私网 HTTP marker | 443 listener、WG interface、每个 peer handshake |
 | Linux One | 外部 `xray/tproxy`、WireGuard、Gateway peer | relay/interface、handshake、ping/HTTP |
-| Windows One | 外部 `xray/tproxy`、WireGuard for Windows、Gateway peer | 同 Linux，使用独立 Spot 节点 |
+| Windows One | 外部 `xray/tproxy`、WireGuard for Windows、Gateway peer | 同 Linux，使用受控局域网主机 |
 | macOS One | 外部 `xray/tproxy`、`wireguard-go`/WireGuard、Gateway peer | 同 Linux；需本机管理员授权或受控 macOS runner |
 
 macOS 不能由普通 GitHub hosted runner 代替：它需要可执行受控的本机管理员操作。
@@ -93,7 +93,7 @@ macOS 不能由普通 GitHub hosted runner 代替：它需要可执行受控的�
 | --- | --- | --- |
 | Gateway | `10.77.0.1/24` | AWS `t4g.small` Spot |
 | Linux One | `10.77.0.2/24` | AWS `t4g.micro` Spot |
-| Windows One | `10.77.0.3/24` | AWS Windows Spot |
+| Windows One | `10.77.0.3/24` | 受控局域网 Windows 主机 |
 | macOS One | `10.77.0.4/24` | 本机或受控 macOS runner |
 
 Gateway 的 WireGuard 配置只包含三个 `/32` peer，启用 IPv4 转发；三个 One 的
@@ -101,6 +101,9 @@ Gateway 的 WireGuard 配置只包含三个 `/32` peer，启用 IPv4 转发；�
 每个 One 都通过自己的 loopback Xray relay 访问它；不开放公网 UDP `51820`。
 验收必须包括 One→Gateway 以及任意已加入 One↔One 的双向私网 ping/HTTP，不能
 只验证 Gateway 自身可达。
+
+GitOps 另保留默认禁用的 Windows Spot role，供后续云端回归使用；它不创建资源，
+也不属于当前四节点测试。
 
 ## 5. 第二阶段：控制面链路
 
@@ -212,8 +215,8 @@ CLI，并使用独立状态目录；不得共享或接管 One 的进程、凭据
 
 1. **数据面实验室**：Gateway + Linux One；自动部署外部 Xray/tproxy、双端
    WireGuard 和临时精确 peer，完成握手、私网 ping/HTTP。
-2. **三平台实验室**：新增 Windows Spot；macOS 作为显式 opt-in 本机/受控 runner
-   验证，三端共享同一运行时契约。
+2. **三平台实验室**：Windows 使用受控局域网主机；macOS 作为显式 opt-in 本机/
+   受控 runner 验证，三端共享同一运行时契约。
 3. **Zero 接入**：以 Accounts 的邀请/自注册、签名配置和策略替换临时实验室配置，
    再验证 ACK、撤销与用户/网络隔离。
 4. **XConnect APP 插件**：后续独立扩展，复用已发布 One CLI，不改变 APP 核心和

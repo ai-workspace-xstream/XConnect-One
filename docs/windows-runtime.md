@@ -63,3 +63,13 @@ the official CLI argument mapping and tunnel-name validation without starting
 an adapter or service. This extraction was not run on a Windows host, so no
 real WireGuard service, Xray process, handshake, cloud controller, or
 end-to-end network validation is claimed.
+
+For a bounded already-enrolled Windows UAT run, use the companion
+[desktop verification kit](desktop-uat-verification.md). It accepts an
+explicit CLI path, checks the exact gateway peer handshake, and labels skipped
+or unavailable checks as `UNVERIFIED` rather than treating them as a pass.
+The kit permits `sync` to change the CLI-owned runtime/routes and adds no
+other routing or DNS behavior.
+The verifier reads `runtime.interface` for the owned WireGuard interface;
+`runtime.adapter_id` remains the runtime identifier (`xray-core`) and is never
+used as a `wg.exe` interface argument.

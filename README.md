@@ -75,8 +75,9 @@ XConnect APP host adapter or Packet Tunnel handoff.
 
 ## macOS prerequisites and installation
 
-Install compatible external `xray`, `wg`, `wg-quick`, and WireGuard userspace
-support (for example the supported Homebrew toolchain). Build the binary for
+Install compatible external `xray`, `wg`, `wg-quick`, and `wireguard-go`, plus
+WireGuard userspace support (for example the supported Homebrew toolchain).
+Build the binary for
 the host architecture, then install the checked release binary on the command
 path before enrollment:
 
@@ -100,6 +101,17 @@ CLI lifecycle and signed configuration contract as Linux and macOS, but
 requires an elevated native `amd64` process, external `xray.exe`, and WireGuard
 for Windows' `wireguard.exe` and `wg.exe`. The CLI does not install or update
 those external runtimes.
+
+## Bounded desktop UAT verification
+
+For an already-enrolled macOS or Windows client, the repository includes a
+bounded verification kit in [docs/desktop-uat-verification.md](docs/desktop-uat-verification.md).
+It accepts an explicit CLI binary path and dedicated state directory, then
+checks `sync`, exact device/network identity in owned `status`, external
+runtime presence, the exact gateway WireGuard peer's latest handshake, one
+literal overlay target, and one HTTP response marker. It reports `PASS`,
+`FAIL`, or `UNVERIFIED`; it does not join, install runtimes, change DNS, add
+routing beyond the CLI's `sync`, or use remote execution.
 
 ## Enroll, sync, and connect
 

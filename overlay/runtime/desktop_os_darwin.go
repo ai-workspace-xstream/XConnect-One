@@ -7,23 +7,36 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
 	"time"
 )
 
+const darwinWireGuardRuntimeDir = "/var/run/wireguard"
+
+var darwinInterfaceNamePattern = regexp.MustCompile(`^[A-Za-z0-9_=+.-]{1,15}$`)
+var darwinRealInterfaceNamePattern = regexp.MustCompile(`^utun[0-9]+$`)
+
 // osDesktopBackend owns only the external CLI runtime. It deliberately does
 // not invoke NetworkExtension or inspect XConnect APP state; the APP plugin is
 // a separate optional composition mode.
-type osDesktopBackend struct{}
+type osDesktopBackend struct {
+	wireGuardRuntimeDir string
+	lstat               func(string) (os.FileInfo, error)
+	readFile            func(string) ([]byte, error)
+}
 
-func newOSDesktopBackend() *osDesktopBackend { return &osDesktopBackend{} }
+func newOSDesktopBackend() *osDesktopBackend {
+	return &osDesktopBackend{wireGuardRuntimeDir: darwinWireGuardRuntimeDir}
+}
 
 func (b *osDesktopBackend) LookPath(name string) (string, error) {
 	path, err := exec.LookPath(name)
@@ -36,6 +49,9 @@ func (b *osDesktopBackend) LookPath(name string) (string, error) {
 func (b *osDesktopBackend) Privileged() bool { return os.Geteuid() == 0 }
 
 func (b *osDesktopBackend) InterfaceIndex(name string) (int, error) {
+	if !darwinInterfaceNamePattern.MatchString(name) {
+		return 0, errors.New("invalid WireGuard interface name")
+	}
 	interfaces, err := net.Interfaces()
 	if err != nil {
 		return 0, err
@@ -45,15 +61,170 @@ func (b *osDesktopBackend) InterfaceIndex(name string) (int, error) {
 			return iface.Index, nil
 		}
 	}
+	realName, err := b.WireGuardInterfaceName(name)
+	if errors.Is(err, os.ErrNotExist) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	for _, iface := range interfaces {
+		if iface.Name == realName {
+			return iface.Index, nil
+		}
+	}
 	return 0, nil
 }
 
 func (b *osDesktopBackend) Run(ctx context.Context, name string, args ...string) error {
+	translated, err := b.translateWireGuardShowArgs(name, args)
+	if err != nil {
+		return err
+	}
+	args = translated
 	command := exec.CommandContext(ctx, name, args...)
 	command.Stdin = nil
 	command.Stdout = io.Discard
 	command.Stderr = io.Discard
 	return command.Run()
+}
+
+func (b *osDesktopBackend) WireGuardInterfaceName(logicalName string) (string, error) {
+	if !darwinInterfaceNamePattern.MatchString(logicalName) {
+		return "", errors.New("invalid WireGuard logical interface name")
+	}
+	runtimeDir := b.wireGuardRuntimeDir
+	if runtimeDir == "" {
+		runtimeDir = darwinWireGuardRuntimeDir
+	}
+	if err := validateDarwinRuntimeDirectory(b.lstatPath, runtimeDir); err != nil {
+		return "", err
+	}
+	mappingPath := filepath.Join(runtimeDir, logicalName+".name")
+	mappingInfo, err := b.lstatPath(mappingPath)
+	if err != nil {
+		return "", fmt.Errorf("read WireGuard interface mapping: %w", err)
+	}
+	if err := validateDarwinOwnedFile(mappingInfo, false); err != nil {
+		return "", fmt.Errorf("validate WireGuard interface mapping: %w", err)
+	}
+	raw, err := b.readFilePath(mappingPath)
+	if err != nil {
+		return "", fmt.Errorf("read WireGuard interface mapping: %w", err)
+	}
+	realName, err := parseDarwinRealInterfaceName(raw)
+	if err != nil {
+		return "", err
+	}
+	socketPath := filepath.Join(runtimeDir, realName+".sock")
+	socketInfo, err := b.lstatPath(socketPath)
+	if err != nil {
+		return "", fmt.Errorf("read WireGuard control socket: %w", err)
+	}
+	if err := validateDarwinOwnedFile(socketInfo, true); err != nil {
+		return "", fmt.Errorf("validate WireGuard control socket: %w", err)
+	}
+	if !darwinMappingFresh(mappingInfo, socketInfo) {
+		return "", errors.New("stale WireGuard interface mapping")
+	}
+	return realName, nil
+}
+
+func (b *osDesktopBackend) translateWireGuardShowArgs(name string, args []string) ([]string, error) {
+	if filepath.Base(name) != "wg" || len(args) < 2 || args[0] != "show" || args[1] == "interfaces" || args[1] == "all" {
+		return args, nil
+	}
+	realName, err := b.WireGuardInterfaceName(args[1])
+	if err != nil {
+		return nil, err
+	}
+	translated := append([]string(nil), args...)
+	translated[1] = realName
+	return translated, nil
+}
+
+func (b *osDesktopBackend) lstatPath(path string) (os.FileInfo, error) {
+	if b.lstat != nil {
+		return b.lstat(path)
+	}
+	return os.Lstat(path)
+}
+
+func (b *osDesktopBackend) readFilePath(path string) ([]byte, error) {
+	if b.readFile != nil {
+		return b.readFile(path)
+	}
+	file, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if err := validateDarwinOwnedFile(info, false); err != nil {
+		return nil, err
+	}
+	raw, err := io.ReadAll(io.LimitReader(file, 64))
+	if err != nil {
+		return nil, err
+	}
+	if len(raw) == 64 {
+		return nil, errors.New("WireGuard interface mapping is too large")
+	}
+	return raw, nil
+}
+
+func validateDarwinRuntimeDirectory(lstat func(string) (os.FileInfo, error), path string) error {
+	info, err := lstat(path)
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || !darwinRootOwned(info) || info.Mode().Perm()&0022 != 0 {
+		return errors.New("WireGuard runtime directory is not root-controlled")
+	}
+	return nil
+}
+
+func validateDarwinOwnedFile(info os.FileInfo, socket bool) error {
+	permissions := info.Mode().Perm()
+	modesOK := permissions == 0o400 || permissions == 0o600
+	if socket {
+		modesOK = permissions == 0o600 || permissions == 0o700
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !darwinRootOwned(info) || !modesOK {
+		return errors.New("path is symlinked or has unsafe ownership/permissions")
+	}
+	if socket {
+		if info.Mode()&os.ModeSocket == 0 {
+			return errors.New("WireGuard control path is not a socket")
+		}
+	} else if !info.Mode().IsRegular() {
+		return errors.New("WireGuard mapping path is not a regular file")
+	}
+	return nil
+}
+
+func darwinRootOwned(info os.FileInfo) bool {
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	return ok && stat.Uid == 0
+}
+
+func parseDarwinRealInterfaceName(raw []byte) (string, error) {
+	if len(raw) > 0 && raw[len(raw)-1] == '\n' {
+		raw = raw[:len(raw)-1]
+	}
+	name := string(raw)
+	if !darwinRealInterfaceNamePattern.MatchString(name) {
+		return "", errors.New("invalid Darwin WireGuard real interface mapping")
+	}
+	return name, nil
+}
+
+func darwinMappingFresh(mapping, socket os.FileInfo) bool {
+	delta := socket.ModTime().Unix() - mapping.ModTime().Unix()
+	return delta >= -1 && delta <= 1
 }
 
 func (b *osDesktopBackend) Start(executable string, args []string, revision, configDigest string) (processIdentity, error) {

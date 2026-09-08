@@ -743,6 +743,12 @@ func generateWireGuardKeyPair() (string, string, error) {
 	return base64.StdEncoding.EncodeToString(privateKey.Bytes()), base64.StdEncoding.EncodeToString(privateKey.PublicKey().Bytes()), nil
 }
 
+// GenerateWireGuardKeyPair is shared by self-registration and invite join so
+// both flows persist the same X25519 key representation.
+func GenerateWireGuardKeyPair() (string, string, error) {
+	return generateWireGuardKeyPair()
+}
+
 func generateUUIDv4() (string, error) {
 	raw := make([]byte, 16)
 	if _, err := rand.Read(raw); err != nil {

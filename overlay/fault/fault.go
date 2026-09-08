@@ -47,6 +47,12 @@ const (
 	CodeCredentialStorage         = "device_credential_storage_unavailable"
 	CodeCredentialRotationPending = "device_credential_rotation_pending"
 	CodeDeviceSessionInvalid      = "device_session_invalid"
+	CodeRegistrationPending       = "registration_pending"
+	CodeRegistrationTokenInvalid  = "invalid_registration_token"
+	CodeRegistrationRejected      = "registration_rejected"
+	CodeRegistrationConsumed      = "registration_consumed"
+	CodeRegistrationExpired       = "registration_expired"
+	CodeRegistrationRateLimited   = "registration_limited"
 )
 
 // Error exposes a stable code while deliberately withholding the wrapped

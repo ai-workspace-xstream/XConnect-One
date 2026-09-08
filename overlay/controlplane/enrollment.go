@@ -228,7 +228,7 @@ func validWireGuardPublicKey(value string) bool {
 		return false
 	}
 	raw, err := base64.StdEncoding.DecodeString(value)
-	return err == nil && len(raw) == 32
+	return err == nil && len(raw) == 32 && base64.StdEncoding.EncodeToString(raw) == value
 }
 
 func validEnrollmentScope(values []string) bool {

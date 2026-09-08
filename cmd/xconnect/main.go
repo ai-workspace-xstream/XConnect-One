@@ -11,9 +11,11 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/ai-workspace-xstream/XConnect-One/overlay/controlplane"
 	"github.com/ai-workspace-xstream/XConnect-One/overlay/credential"
@@ -30,7 +32,9 @@ type runtimeFactory func(stateDirectory string) overlayruntime.Interface
 type credentialFactory func(stateDirectory string) credential.Store
 
 func main() {
-	if err := run(context.Background(), os.Args[1:], os.Stdout, os.Stderr, http.DefaultClient); err != nil {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+	if err := run(ctx, os.Args[1:], os.Stdout, os.Stderr, http.DefaultClient); err != nil {
 		fmt.Fprintf(os.Stderr, "error[%s]: %v\n", fault.Code(err), err)
 		os.Exit(1)
 	}
@@ -63,9 +67,11 @@ func runWithRuntimeFactory(ctx context.Context, args []string, stdout, stderr io
 
 func runWithFactories(ctx context.Context, args []string, stdout, stderr io.Writer, httpClient *http.Client, newRuntime runtimeFactory, newCredentials credentialFactory) error {
 	if len(args) == 0 {
-		return fault.New(fault.CodeInvalidInput, "expected join, sync, up, down, leave, status, diagnose, credential, admin, or policy", nil)
+		return fault.New(fault.CodeInvalidInput, "expected register, join, sync, up, down, leave, status, diagnose, credential, admin, or policy", nil)
 	}
 	switch args[0] {
+	case "register":
+		return runRegister(ctx, args[1:], stdout, stderr, httpClient, newRuntime, newCredentials)
 	case "join":
 		return runJoin(ctx, args[1:], stdout, stderr, httpClient, newRuntime, newCredentials)
 	case "sync":
@@ -89,6 +95,38 @@ func runWithFactories(ctx context.Context, args []string, stdout, stderr io.Writ
 	default:
 		return fault.New(fault.CodeInvalidInput, "unknown command", nil)
 	}
+}
+
+func runRegister(ctx context.Context, args []string, stdout, stderr io.Writer, httpClient *http.Client, newRuntime runtimeFactory, newCredentials credentialFactory) error {
+	flags := flag.NewFlagSet("xconnect register", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	controller := flags.String("controller", "", "HTTPS accounts controller base URL")
+	networkID := flags.String("network", "", "public overlay network ID")
+	stateDirectory := flags.String("state-dir", defaultStateDirectory(), "local XConnect-One state directory")
+	deviceID := flags.String("device-id", defaultDeviceID(), "stable local device ID")
+	deviceName := flags.String("name", "", "device display name")
+	if err := flags.Parse(args); err != nil || flags.NArg() != 0 {
+		return fault.New(fault.CodeInvalidInput, "parse register arguments", err)
+	}
+	if strings.TrimSpace(*controller) == "" || strings.TrimSpace(*networkID) == "" {
+		return fault.New(fault.CodeInvalidInput, "register requires controller and network", nil)
+	}
+	client, err := controlplane.New(*controller, "", httpClient)
+	if err != nil {
+		return err
+	}
+	hostname, _ := os.Hostname()
+	store := state.NewStore(*stateDirectory)
+	registrar := usecase.NewRegistrar(client, store, newCredentials(*stateDirectory), newRuntime(*stateDirectory)).WithProgress(func(progress usecase.RegistrationProgress) {
+		_, _ = fmt.Fprintf(stderr, "xconnect: registration %s; registration_id=%s device_id=%s network_id=%s expires_at=%s wireguard_public_key_fingerprint=%s; approve this device in Zero\n", progress.Status, progress.RegistrationID, progress.DeviceID, progress.NetworkID, progress.ExpiresAt.UTC().Format(time.RFC3339), progress.WireGuardPublicKeyFingerprint)
+	})
+	result, err := registrar.Register(ctx, usecase.RegisterRequest{
+		Controller: *controller, DeviceID: *deviceID, DeviceName: *deviceName, NetworkID: *networkID, Platform: runtime.GOOS, Hostname: hostname,
+	})
+	if err != nil {
+		return err
+	}
+	return writeJSON(stdout, result)
 }
 
 func runJoin(ctx context.Context, args []string, stdout, stderr io.Writer, httpClient *http.Client, newRuntime runtimeFactory, newCredentials credentialFactory) error {

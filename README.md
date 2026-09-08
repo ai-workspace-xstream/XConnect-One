@@ -113,6 +113,16 @@ literal overlay target, and one HTTP response marker. It reports `PASS`,
 `FAIL`, or `UNVERIFIED`; it does not join, install runtimes, change DNS, add
 routing beyond the CLI's `sync`, or use remote execution.
 
+## One self-registration
+
+The standalone binary supports invite-free, owner-credential-free
+self-registration on Linux, macOS and Windows. See
+[docs/self-registration.md](docs/self-registration.md) for the HTTPS contract,
+private resumable state, pending safety boundary, and usage of
+`xconnect register --controller ... --network ...`. Pending registration never
+starts an external runtime; approval reuses the formal signed-config, apply,
+and ACK enrollment path.
+
 ## Enroll, sync, and connect
 
 Run these commands on the Linux host after installing the built binary as

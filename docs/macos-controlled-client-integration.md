@@ -39,7 +39,7 @@ format, enrollment state, or lifecycle vocabulary.
 XConnect-One owns Zero invitation exchange, device credential and session
 renewal, signature verification, replay protection, its local WireGuard key,
 configuration generation, Xray/WireGuard lifecycle, status checks and ACK
-sequencing. On macOS it runs the signed, externally installed `xray`, `wg`,
+sequencing. On macOS it runs the compatible externally installed `xray`, `wg`,
 `wg-quick`, and `wireguard-go` WireGuard userspace/kernel tools under
 administrator privileges.
 
@@ -49,16 +49,16 @@ APP credentials, or an APP-managed VPN connection. `down` and `leave` remove
 only One-owned runtime state; `leave` also revokes the remote device.
 
 XConnect APP remains an independent product. A future plugin may launch the
-same CLI or expose a documented local VLESS service, but the standalone CLI
-does not inspect APP state, use a private APP API, or hand profiles to a Packet
-Tunnel extension. Such a composition must be separately versioned and cannot
-change the standalone Zero enrollment or signed-config contract.
+same CLI with a dedicated One state directory, but the standalone CLI does not
+inspect APP state, use a private APP API, or hand profiles to a Packet Tunnel
+extension. Such composition must be separately versioned and cannot change the
+standalone Zero enrollment or signed-config contract.
 
 ## Data path
 
 ```text
 macOS XConnect-One CLI
-  -> One-owned local Xray UDP relay
+  -> One-owned external Xray UDP relay
   -> VLESS/TLS/XUDP
   -> Gateway Xray
   -> Gateway WireGuard

@@ -592,10 +592,18 @@ func hasWindowsPrivateACL(path string) bool {
 }
 
 func matchesWindowsPrivateDACL(sddl string) bool {
-	if !strings.HasPrefix(sddl, "D:P") {
+	// Owner and group sections normally precede `D:` in Windows SDDL.  Compare
+	// the protected DACL itself, not the complete descriptor string.
+	daclOffset := strings.Index(sddl, "D:")
+	if daclOffset < 0 {
 		return false
 	}
-	body := strings.TrimPrefix(sddl, "D:P")
+	body := strings.TrimPrefix(sddl[daclOffset+len("D:"):], "P")
+	if body == sddl[daclOffset+len("D:"):] {
+		return false
+	}
+	// `AI` records auto-inheritance metadata and does not add a principal.
+	body = strings.TrimPrefix(body, "AI")
 	for _, ace := range []string{"(A;;FA;;;SY)", "(A;;FA;;;BA)", "(A;;FA;;;OW)"} {
 		if strings.Count(body, ace) != 1 {
 			return false

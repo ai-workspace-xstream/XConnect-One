@@ -137,7 +137,7 @@ func TestProductionJoinFailsClosedWithoutPlatformRuntimeAndDoesNotAck(t *testing
 	// to mutate networking when run as root on a provisioned Linux host.
 	t.Setenv("PATH", t.TempDir())
 	wantCode := fault.CodeRuntimeUnavailable
-	if runtime.GOOS == "linux" || runtime.GOOS == "darwin" {
+	if runtime.GOOS == "linux" || runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
 		wantCode = fault.CodeRuntimeDependency
 	}
 	var ackCalls atomic.Int32

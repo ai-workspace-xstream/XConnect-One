@@ -225,12 +225,19 @@ func (s *Store) AcceptSignedConfig(controller, deviceID, networkID, configID, pa
 		if binding.Controller != controller || binding.DeviceID != deviceID || binding.NetworkID != networkID {
 			continue
 		}
-		if generation < binding.HighestGeneration || generation == binding.HighestGeneration && (binding.ConfigID != configID || binding.PayloadSHA256 != payloadSHA256) {
+		// ConfigID is the authoritative identity for a configuration generation.
+		// Accounts may re-sign that exact configuration to renew its issued/expiry
+		// window, which changes the signed payload digest without changing the
+		// generation or ConfigID. Reject a different configuration identity at the
+		// same generation, but accept and retain a renewed signature.
+		if generation < binding.HighestGeneration || generation == binding.HighestGeneration && binding.ConfigID != configID {
 			return fault.New(fault.CodeConfigReplay, "accept signed config generation", nil)
 		}
 		if generation > binding.HighestGeneration {
 			binding.HighestGeneration = generation
 			binding.ConfigID = configID
+			binding.PayloadSHA256 = payloadSHA256
+		} else if binding.PayloadSHA256 != payloadSHA256 {
 			binding.PayloadSHA256 = payloadSHA256
 		}
 		binding.SignedLocked = true
@@ -262,7 +269,7 @@ func (s *Store) ValidateSignedConfigFloor(controller, deviceID, networkID, confi
 		return err
 	}
 	for _, binding := range contractState.Bindings {
-		if binding.Controller == controller && binding.DeviceID == deviceID && binding.NetworkID == networkID && (generation < binding.HighestGeneration || generation == binding.HighestGeneration && (binding.ConfigID != configID || binding.PayloadSHA256 != payloadSHA256)) {
+		if binding.Controller == controller && binding.DeviceID == deviceID && binding.NetworkID == networkID && (generation < binding.HighestGeneration || generation == binding.HighestGeneration && binding.ConfigID != configID) {
 			return fault.New(fault.CodeConfigReplay, "validate signed config generation", nil)
 		}
 	}

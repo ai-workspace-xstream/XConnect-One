@@ -29,18 +29,21 @@ state semantics. All platforms use the same invitation format, device-bound
 credential, signed configuration verification, generation replay protection,
 ACK policy, and explicit state-directory ownership.
 
-Only the external runtime adapter is platform-specific. Each adapter starts
-the compatible external Xray and WireGuard tools and verifies its owned
-interface. It must not introduce a platform-specific Zero API, configuration
+Only the transport/runtime adapter is platform-specific. Linux and Windows
+start compatible external Xray and WireGuard tools. macOS is being moved to an
+explicit XConnect APP transport-provider contract: One manages its own
+WireGuard interface but does not manage the APP's Xray, SOCKS5 or TUN process.
+None of the adapters may introduce a platform-specific Zero API, configuration
 format, enrollment state, or lifecycle vocabulary.
 
 ## Runtime ownership
 
 XConnect-One owns Zero invitation exchange, device credential and session
 renewal, signature verification, replay protection, its local WireGuard key,
-configuration generation, Xray/WireGuard lifecycle, status checks and ACK
-sequencing. On macOS it runs the signed, externally installed `xray`, `wg`,
-`wg-quick`, and `wireguard-go` WireGuard userspace/kernel tools under
+configuration generation, WireGuard lifecycle, status checks and ACK
+sequencing. On macOS the APP transport provider owns Xray, SOCKS5 and TUN; One
+does not embed, inspect, configure, start or stop those APP processes. One runs
+the compatible externally installed WireGuard userspace/kernel tools under
 administrator privileges.
 
 The CLI creates only its declared interface and files under its explicit state
@@ -48,17 +51,20 @@ directory. It must not touch existing `utun` devices, XConnect APP settings,
 APP credentials, or an APP-managed VPN connection. `down` and `leave` remove
 only One-owned runtime state; `leave` also revokes the remote device.
 
-XConnect APP remains an independent product. A future plugin may launch the
-same CLI or expose a documented local VLESS service, but the standalone CLI
-does not inspect APP state, use a private APP API, or hand profiles to a Packet
-Tunnel extension. Such a composition must be separately versioned and cannot
-change the standalone Zero enrollment or signed-config contract.
+XConnect APP remains an independent product. Its macOS plugin is the future
+transport provider and may launch the same CLI with a dedicated One state
+directory. It must expose a versioned, loopback-only UDP relay contract bound
+to the signed One configuration, but the CLI does not inspect APP state or use
+a private APP API. Such composition must not change the standalone Zero
+enrollment or signed-config contract. The current released macOS CLI still
+uses its independent external tproxy path until this provider contract ships.
 
 ## Data path
 
 ```text
 macOS XConnect-One CLI
-  -> One-owned local Xray UDP relay
+  -> APP-owned local UDP relay
+  -> APP-owned Xray/SOCKS5 or TUN transport
   -> VLESS/TLS/XUDP
   -> Gateway Xray
   -> Gateway WireGuard

@@ -78,11 +78,23 @@ func hasPrivateStateACL(path string) bool {
 	if err != nil || control&windows.SE_DACL_PROTECTED == 0 {
 		return false
 	}
+	// SecurityDescriptor.String() includes owner/group sections before the
+	// DACL on normal NTFS files (for example `O:...G:...D:P...`).  Checking
+	// the whole string for a DACL prefix therefore rejects a file immediately
+	// after we secured it.  Inspect only the DACL fragment and keep rejecting
+	// any unexpected ACE there.
 	sddl := securityDescriptor.String()
-	if !strings.HasPrefix(sddl, "D:P") {
+	daclOffset := strings.Index(sddl, "D:")
+	if daclOffset < 0 {
 		return false
 	}
-	body := strings.TrimPrefix(sddl, "D:P")
+	body := strings.TrimPrefix(sddl[daclOffset+len("D:"):], "P")
+	if body == sddl[daclOffset+len("D:"):] {
+		return false
+	}
+	// Windows may retain the auto-inherited marker after an ACL is protected.
+	// It is metadata, not an additional principal grant.
+	body = strings.TrimPrefix(body, "AI")
 	for _, ace := range []string{"(A;;FA;;;SY)", "(A;;FA;;;BA)", "(A;;FA;;;OW)"} {
 		if strings.Count(body, ace) != 1 {
 			return false

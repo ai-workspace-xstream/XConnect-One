@@ -23,6 +23,17 @@ Linux 支持 `amd64` / `arm64`，macOS 支持 Intel / Apple Silicon。默认安�
 GitHub Release 通过受控镜像提供时，安装脚本使用
 `XCONNECT_ONE_RELEASE_BASE_URL` 覆盖下载根地址。
 
+macOS 也可以使用仓库中的 Homebrew 公式。公式固定到同一版本，并按 Apple
+Silicon/Intel 选择制品、校验 sha256；它同样只安装 CLI：
+
+```sh
+brew install --formula \
+  https://raw.githubusercontent.com/ai-workspace-xstream/XConnect-One/main/Formula/xconnect-one.rb
+```
+
+如果后续建立专用 Homebrew tap，可将上面的 URL 替换为
+`brew install ai-workspace-xstream/tap/xconnect-one`；运行时和 Zero 加入步骤不变。
+
 Windows 在管理员 PowerShell 中执行：
 
 ```powershell

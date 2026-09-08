@@ -63,7 +63,21 @@ func TestMatchesWindowsPrivateDACL(t *testing.T) {
 }
 
 func TestWindowsPrivateACLReadbackIsTrusted(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "runtime.json")
+	directory := filepath.Join(t.TempDir(), "runtime")
+	if err := os.Mkdir(directory, 0o700); err != nil {
+		t.Fatalf("create runtime directory: %v", err)
+	}
+	if err := setWindowsPrivateACL(directory); err != nil {
+		t.Fatalf("set private directory ACL: %v", err)
+	}
+	directoryDescriptor, err := windows.GetNamedSecurityInfo(directory, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION|windows.OWNER_SECURITY_INFORMATION)
+	if err != nil {
+		t.Fatalf("read private directory ACL: %v", err)
+	}
+	if !hasWindowsPrivateACL(directory) {
+		t.Fatalf("private directory ACL readback was not trusted: %q", directoryDescriptor.String())
+	}
+	path := filepath.Join(directory, "runtime.json")
 	if err := os.WriteFile(path, []byte("test"), 0o600); err != nil {
 		t.Fatalf("write runtime artifact: %v", err)
 	}

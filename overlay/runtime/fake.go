@@ -56,6 +56,7 @@ func (f *Fake) Apply(_ context.Context, request ApplyRequest) (ApplyResult, erro
 		Revision:  request.Config.Revision,
 		CoreID:    request.Config.CoreID(),
 		AdapterID: request.Config.AdapterID(),
+		Interface: request.Config.WireGuard.Interface,
 	}
 	return ApplyResult{
 		Revision:  request.Config.Revision,

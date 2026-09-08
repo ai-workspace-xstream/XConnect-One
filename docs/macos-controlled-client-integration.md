@@ -40,8 +40,8 @@ XConnect-One owns Zero invitation exchange, device credential and session
 renewal, signature verification, replay protection, its local WireGuard key,
 configuration generation, Xray/WireGuard lifecycle, status checks and ACK
 sequencing. On macOS it runs the signed, externally installed `xray`, `wg`,
-`wg-quick`, and WireGuard userspace/kernel tools under administrator
-privileges.
+`wg-quick`, and `wireguard-go` WireGuard userspace/kernel tools under
+administrator privileges.
 
 The CLI creates only its declared interface and files under its explicit state
 directory. It must not touch existing `utun` devices, XConnect APP settings,
@@ -103,3 +103,9 @@ endpoint: WireGuard traffic remains carried over VLESS.
 | private path | Gateway handshake and authorized ping/HTTP succeed |
 | teardown | `down` removes the One-owned overlay path |
 | isolation | Linux, macOS, Windows and APP credentials/state remain separate |
+
+For a bounded already-enrolled desktop UAT run on macOS, use
+[docs/desktop-uat-verification.md](desktop-uat-verification.md). The companion
+Windows script follows the same check and exit-status contract. The verifier
+allows `sync` to apply the CLI-owned runtime/routes but adds no routing of its
+own.

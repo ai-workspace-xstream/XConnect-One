@@ -358,7 +358,7 @@ func TestDesktopDownAndUpAreIdempotent(t *testing.T) {
 		t.Fatalf("up: %v", err)
 	}
 	status, err := tunnelRuntime.Status(t.Context())
-	if err != nil || !status.Applied || status.Revision != request.Config.Revision {
+	if err != nil || !status.Applied || status.Revision != request.Config.Revision || status.Interface != request.Config.WireGuard.Interface {
 		t.Fatalf("status=%#v err=%v", status, err)
 	}
 }
@@ -562,7 +562,7 @@ func TestDesktopStatusAndDiagnoseAreSecretFree(t *testing.T) {
 		t.Fatalf("apply: %v", err)
 	}
 	status, err := tunnelRuntime.Status(t.Context())
-	if err != nil || !status.Available || !status.Applied {
+	if err != nil || !status.Available || !status.Applied || status.Interface != request.Config.WireGuard.Interface || status.AdapterID != model.AdapterIDXrayCore {
 		t.Fatalf("status = %#v, err=%v", status, err)
 	}
 	diagnostics, err := tunnelRuntime.Diagnose(t.Context())

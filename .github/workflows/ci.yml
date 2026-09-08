@@ -25,6 +25,13 @@ jobs:
         run: test -z "$(gofmt -l cmd overlay)"
       - run: go vet ./...
       - run: go test -race -count=1 ./...
+      - name: Test macOS desktop verifier offline
+        if: runner.os == 'macOS'
+        run: bash scripts/test-desktop-verification.sh
+      - name: Test Windows desktop verifier parsers offline
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: ./scripts/test-desktop-verification.ps1
 
   build:
     needs: test

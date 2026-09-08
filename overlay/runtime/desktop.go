@@ -95,6 +95,13 @@ type wireGuardServiceBackend interface {
 	WireGuardServiceState(interfaceName, executable, configPath string) (exists, owned bool, err error)
 }
 
+// wireGuardInterfaceResolver is implemented by Darwin, where wg-quick keeps
+// the configured logical name in the manifest but wireguard-go creates a
+// kernel-visible utunN interface.
+type wireGuardInterfaceResolver interface {
+	WireGuardInterfaceName(string) (string, error)
+}
+
 func (r *Desktop) wireGuardServiceState(interfaceName, executable, configPath string) (bool, bool, error) {
 	backend, ok := r.backend.(wireGuardServiceBackend)
 	if !ok {
@@ -231,6 +238,15 @@ func (r *Desktop) Status(ctx context.Context) (Status, error) {
 	if err != nil {
 		return Status{}, err
 	}
+	interfaceName := manifest.Interface
+	if resolver, ok := r.backend.(wireGuardInterfaceResolver); ok {
+		resolved, resolveErr := resolver.WireGuardInterfaceName(manifest.Interface)
+		if resolveErr != nil {
+			interfaceName = ""
+		} else {
+			interfaceName = resolved
+		}
+	}
 	healthy, healthErr := r.manifestHealthy(ctx, manifest, dependencies)
 	if healthErr != nil && fault.Code(healthErr) != fault.CodeRuntimeProcessStale {
 		return Status{}, healthErr
@@ -241,6 +257,7 @@ func (r *Desktop) Status(ctx context.Context) (Status, error) {
 		Revision:  manifest.Revision,
 		CoreID:    manifest.CoreID,
 		AdapterID: manifest.AdapterID,
+		Interface: interfaceName,
 	}, nil
 }
 

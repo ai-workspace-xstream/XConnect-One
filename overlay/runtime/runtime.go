@@ -25,6 +25,7 @@ type Status struct {
 	Revision  string `json:"revision,omitempty"`
 	CoreID    string `json:"core_id,omitempty"`
 	AdapterID string `json:"adapter_id,omitempty"`
+	Interface string `json:"interface,omitempty"`
 }
 
 type Diagnostic struct {

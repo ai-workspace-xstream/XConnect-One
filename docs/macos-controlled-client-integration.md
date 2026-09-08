@@ -1,8 +1,8 @@
-# macOS controlled-client integration
+# macOS controlled-client runtime
 
-This document defines the macOS role in the three-node XConnect One
-validation topology. It is an integration contract, not a source merge with
-`xconnect-app`.
+This document defines the standalone macOS role in the three-node XConnect One
+validation topology. It is not a source merge with `xconnect-app`, and it does
+not require a macOS host adapter or Packet Tunnel handoff.
 
 ## Topology
 
@@ -13,136 +13,93 @@ XConnect Zero
        |
        +--> XConnect One Gateway       AWS t4g.small Spot / Linux relay
        +--> XConnect One Linux client  AWS t4g.micro Spot / Linux CLI runtime
-       +--> XConnect One macOS client  local Mac / CLI + XConnect APP plugin
-                                      WireGuard over APP-owned VLESS egress
+       +--> XConnect One macOS client  local Mac / standalone CLI runtime
+                                      WireGuard over VLESS
 ```
 
-The three entries are separate device roles in Zero. A macOS device must have
-its own device ID, WireGuard key pair, address allocation and signed
-configuration. It must never reuse the Linux client's credential or state
-directory.
+The three entries are separate device roles in Zero. A macOS device has its own
+device ID, WireGuard key pair, address allocation, signed configuration and
+state directory. It never reuses a Linux device's credential or state.
 
-## Ownership
+## Cross-platform CLI contract
 
-### XConnect-One CLI
+Linux, macOS and Windows ship one controlled-client contract: `join`, `sync`,
+`status`, `diagnose`, `down`, and `leave` have identical control-plane and
+state semantics. All platforms use the same invitation format, device-bound
+credential, signed configuration verification, generation replay protection,
+ACK policy, and explicit state-directory ownership.
 
-The independent CLI owns:
+Only the external runtime adapter is platform-specific. Each adapter starts
+the compatible external Xray and WireGuard tools and verifies its owned
+interface. It must not introduce a platform-specific Zero API, configuration
+format, enrollment state, or lifecycle vocabulary.
 
-- Zero invite exchange, device credential and session renewal;
-- signed configuration verification and generation replay protection;
-- local WireGuard private-key generation and protected state;
-- compilation of the macOS WireGuard client profile;
-- desired runtime state (`sync`, `down`, `leave`) and ACK sequencing;
-- a narrow local handoff to the XConnect APP plugin.
+## Runtime ownership
 
-The CLI does not import Flutter code, link `libXray`, read the APP's node
-database, or copy the APP's private VLESS credentials.
+XConnect-One owns Zero invitation exchange, device credential and session
+renewal, signature verification, replay protection, its local WireGuard key,
+configuration generation, Xray/WireGuard lifecycle, status checks and ACK
+sequencing. On macOS it runs the signed, externally installed `xray`, `wg`,
+`wg-quick`, and WireGuard userspace/kernel tools under administrator
+privileges.
 
-### XConnect APP
+The CLI creates only its declared interface and files under its explicit state
+directory. It must not touch existing `utun` devices, XConnect APP settings,
+APP credentials, or an APP-managed VPN connection. `down` and `leave` remove
+only One-owned runtime state; `leave` also revokes the remote device.
 
-The APP remains an independently installable product. Its existing macOS
-Packet Tunnel extension owns:
-
-- `NETunnelProviderManager` and the user-approved system VPN boundary;
-- the existing Xray/libXray VLESS egress;
-- Packet Tunnel lifecycle, utun setup and native entitlements;
-- user-visible permission, connection and error presentation.
-
-The APP plugin accepts a versioned One runtime handoff. It may translate the
-handoff into its existing Packet Tunnel profile, but it must not become the
-source of Zero identity or policy state.
-
-### Gateway
-
-The Gateway is an independent Linux relay. It terminates the VLESS transport
-and forwards the UDP WireGuard stream to its co-located WireGuard listener.
-It does not run the macOS CLI and does not receive a macOS private key.
+XConnect APP remains an independent product. A future plugin may launch the
+same CLI or expose a documented local VLESS service, but the standalone CLI
+does not inspect APP state, use a private APP API, or hand profiles to a Packet
+Tunnel extension. Such a composition must be separately versioned and cannot
+change the standalone Zero enrollment or signed-config contract.
 
 ## Data path
 
-The macOS path is deliberately asymmetric:
-
 ```text
-macOS WireGuard client
-  -> local UDP relay / APP-owned VLESS egress
+macOS XConnect-One CLI
+  -> One-owned local Xray UDP relay
   -> VLESS/TLS/XUDP
   -> Gateway Xray
   -> Gateway WireGuard
   -> private network
 ```
 
-The signed Zero configuration describes the Gateway transport and the
-WireGuard peer. The macOS host adapter maps those fields to the native
-Packet Tunnel implementation. The remote Gateway address is never replaced
-with a public WireGuard endpoint: WireGuard remains carried over VLESS.
-
-## Handoff contract
-
-The first implementation should use a local, permission-restricted IPC
-adapter supplied by XConnect APP. The contract must contain only:
-
-- protocol version and request ID;
-- device ID, network ID and configuration generation;
-- a digest of the signed configuration;
-- the compiled WireGuard profile reference in an APP-group protected file;
-- the VLESS egress profile reference, resolved by the APP's existing node
-  store, never a copied UUID or password;
-- requested action: `apply`, `down`, `status` or `cleanup`.
-
-Private keys and raw signed configuration must not appear in command-line
-arguments, process listings, logs or a public TCP listener. The APP adapter
-must verify file ownership, mode, generation and digest before handing the
-profile to the Packet Tunnel extension. The CLI must treat the adapter as an
-external runtime and ACK only after it reports an applied generation.
-
-The existing `app-bridge` JSONL protocol remains the optional composition
-entry point. Its current `join` and `sync` calls are control-plane calls for
-the independent CLI; a future macOS runtime extension may add a separately
-versioned runtime method rather than changing the meaning of existing fields.
+The signed Zero configuration describes the Gateway transport and WireGuard
+peer. The remote Gateway address is never replaced with a public WireGuard
+endpoint: WireGuard traffic remains carried over VLESS.
 
 ## Lifecycle
 
-1. The user installs or updates XConnect APP and grants the Packet Tunnel
-   permission once.
-2. The user supplies an invite issued by Zero Portal for platform `darwin`.
-3. XConnect-One exchanges the invite, generates a local WireGuard key and
-   fetches the signed configuration.
-4. XConnect-One writes a protected handoff and asks the APP adapter to apply
-   the generation.
-5. The APP configures its existing VLESS egress and Packet Tunnel boundary;
-   the local WireGuard profile sends its UDP peer traffic to that egress.
-6. XConnect-One checks adapter status and sends the Zero ACK.
-7. `sync` repeats the signed fetch and only restarts the runtime when the
-   generation or digest changes. `down` stops local data-plane ownership but
-   retains enrollment. `leave` revokes the device before local cleanup.
+1. Install the One binary on the command path and install compatible external
+   Xray/WireGuard runtimes.
+2. Issue a unique platform-specific invitation from Zero Portal.
+3. Run `xconnect join`; One exchanges the invitation, creates its local key and
+   fetches signed configuration.
+4. Run `xconnect sync`; One validates the configuration, starts its local Xray
+   and WireGuard processes, verifies local readiness, and ACKs the generation.
+5. Verify a recent Gateway/client WireGuard handshake plus authorized private
+   ping and HTTP.
+6. Run `xconnect down` after a disposable test, or `xconnect leave` to revoke
+   the device and remove One-owned local state.
 
-## Security invariants
+## Security and acceptance
 
-- XConnect APP and XConnect-One use separate state directories.
 - Zero is the only authoritative source for device, policy and signed config.
-- The APP's VLESS node database is not exported to GitOps or One state.
-- GitOps may contain non-sensitive topology, ports, role and digest metadata;
-  Vault remains the source for bootstrap and transport secrets.
-- A macOS device receives a unique WireGuard address and peer policy.
-- A local readiness result is not accepted as a network proof. Validation
-  must include a recent Gateway/client WireGuard handshake and an authorized
-  private ping/HTTP check.
-
-## Acceptance matrix
+- GitOps contains only non-sensitive topology, ports, role and digest metadata;
+  Vault holds bootstrap and transport secrets.
+- Private keys, invitations and raw signed configuration must not appear in
+  command-line arguments, logs, public listeners, or shared APP state.
+- A local process check is not network proof: acceptance requires the recent
+  handshake and the authorized private ping/HTTP test.
 
 | Check | Expected result |
 |---|---|
-| macOS invite exchange | Device is created with platform `darwin` |
-| signed config | Generation, device and network ownership validate |
-| WireGuard profile | Only the CLI-owned macOS profile is changed |
-| VLESS reuse | APP starts/reuses its existing egress; One receives no VLESS secret |
-| Packet Tunnel | APP reports the requested generation applied |
-| Zero ACK | Sent only after the APP adapter confirms apply |
-| private path | macOS -> VLESS -> Gateway -> WireGuard reaches authorized target |
-| teardown | `down` removes the local overlay path and private target is unreachable |
-| isolation | Linux and macOS credentials, addresses and state remain distinct |
-
-The current standalone One binary does not yet implement this macOS adapter.
-Until the adapter and Packet Tunnel handoff land, macOS validation is limited
-to build, protocol parsing and control-plane fixtures; it must not be called a
-successful private-network join.
+| invite exchange | Separate platform device is created |
+| signed config | Device, network, generation and ownership validate |
+| runtime | Only the CLI-owned Xray/WireGuard profile changes |
+| VLESS transport | WireGuard reaches Gateway through VLESS/TLS/XUDP |
+| Zero ACK | Sent after local runtime readiness is verified |
+| private path | Gateway handshake and authorized ping/HTTP succeed |
+| teardown | `down` removes the One-owned overlay path |
+| isolation | Linux, macOS, Windows and APP credentials/state remain separate |

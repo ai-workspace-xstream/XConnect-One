@@ -66,10 +66,31 @@ The gateway must accept the issued VLESS identity and forward its UDP traffic
 to WireGuard, with this device's WireGuard public key, address, return routes
 and access policy provisioned. This repository does not deploy either service.
 
-The macOS controlled-client composition boundary is documented in
+The macOS controlled-client runtime is documented in
 [docs/macos-controlled-client-integration.md](docs/macos-controlled-client-integration.md).
-It keeps One independent while allowing XConnect APP to provide the
-privileged Packet Tunnel/VLESS egress.
+It uses the same external-runtime contract as Linux: One starts the signed
+Xray and WireGuard processes it owns. It neither requires nor implements an
+XConnect APP host adapter or Packet Tunnel handoff.
+
+## macOS prerequisites and installation
+
+Install compatible external `xray`, `wg`, `wg-quick`, and WireGuard userspace
+support (for example the supported Homebrew toolchain). Build the binary for
+the host architecture, then install the checked release binary on the command
+path before enrollment:
+
+```sh
+sudo install -d -m 0755 /usr/local/bin
+sudo install -m 0755 dist/xconnect-macos-arm64 /usr/local/bin/xconnect
+sudo /usr/local/bin/xconnect diagnose --state-dir /var/lib/xconnect-one
+```
+
+The command uses its inherited executable path to locate external runtimes.
+Before running it with `sudo`, ensure the administrator environment can find
+the trusted Xray and WireGuard executables (or use the deployment mechanism to
+place them in an administrator-visible path). The CLI creates only its named,
+owned WireGuard interface and files beneath its explicit state directory; it
+does not read, alter, or rely on XConnect APP state.
 
 ## Enroll, sync, and connect
 

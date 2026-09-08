@@ -39,11 +39,12 @@ type fakeDesktopBackend struct {
 }
 
 func newFakeDesktopBackend() *fakeDesktopBackend {
+	testRuntimeRoot := filepath.Join(os.TempDir(), "xconnect-runtime-test", "bin")
 	return &fakeDesktopBackend{
 		paths: map[string]string{
-			"xray":     "/opt/xconnect/bin/xray",
-			"wg":       "/usr/bin/wg",
-			"wg-quick": "/usr/bin/wg-quick",
+			"xray":     filepath.Join(testRuntimeRoot, "xray"),
+			"wg":       filepath.Join(testRuntimeRoot, "wg"),
+			"wg-quick": filepath.Join(testRuntimeRoot, "wg-quick"),
 		},
 		privileged:       true,
 		runErrors:        make(map[string][]error),

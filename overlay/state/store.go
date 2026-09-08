@@ -8,8 +8,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -21,6 +23,8 @@ import (
 const SchemaVersion = 1
 
 var ErrNotFound = errors.New("overlay state not found")
+
+var registrationIDPattern = regexp.MustCompile(`^xreg_[A-Za-z0-9_-]{1,123}$`)
 
 type Phase string
 
@@ -118,6 +122,50 @@ type EnrollmentSecret struct {
 	CreatedAt          time.Time                `json:"created_at"`
 }
 
+// RegistrationState is the private, resumable handoff for One self-registration.
+// It is never included in status or diagnostic output. Approved contains the
+// existing enrollment exchange response so a consumed registration token can
+// still resume the signed-config/apply/ACK phases after a local crash.
+type RegistrationState struct {
+	SchemaVersion       int                   `json:"schema_version"`
+	Controller          string                `json:"controller"`
+	RegistrationID      string                `json:"registration_id,omitempty"`
+	RegistrationToken   string                `json:"registration_token,omitempty"`
+	Status              string                `json:"status"`
+	ExpiresAt           time.Time             `json:"expires_at,omitempty"`
+	Interval            int                   `json:"interval,omitempty"`
+	DeviceID            string                `json:"device_id"`
+	DeviceName          string                `json:"device_name,omitempty"`
+	NetworkID           string                `json:"network_id"`
+	Platform            string                `json:"platform"`
+	Hostname            string                `json:"hostname,omitempty"`
+	WireGuardPrivateKey string                `json:"wireguard_private_key"`
+	WireGuardPublicKey  string                `json:"wireguard_public_key"`
+	CreatedAt           time.Time             `json:"created_at"`
+	UpdatedAt           time.Time             `json:"updated_at"`
+	Approved            *RegistrationExchange `json:"approved,omitempty"`
+}
+
+type RegistrationExchange struct {
+	EnrollmentToken  string                       `json:"enrollment_token"`
+	TokenType        string                       `json:"token_type"`
+	ExpiresAt        time.Time                    `json:"expires_at"`
+	Scope            []string                     `json:"scope"`
+	DeviceCredential RegistrationDeviceCredential `json:"device_credential"`
+	Device           model.Device                 `json:"device"`
+	Network          model.Network                `json:"network"`
+	SigningKeys      signedconfig.SigningKeys     `json:"signing_keys"`
+}
+
+type RegistrationDeviceCredential struct {
+	CredentialID string    `json:"credential_id"`
+	Credential   string    `json:"credential"`
+	TokenType    string    `json:"token_type"`
+	IssuedAt     time.Time `json:"issued_at"`
+	ExpiresAt    time.Time `json:"expires_at"`
+	Scope        []string  `json:"scope"`
+}
+
 func NewStore(dir string) *Store { return &Store{dir: dir} }
 
 func (s *Store) Directory() string { return s.dir }
@@ -140,6 +188,37 @@ func (s *Store) SigningKeyCachePath() string {
 
 func (s *Store) EnrollmentSecretPath() string {
 	return filepath.Join(s.dir, "enrollment-secret.json")
+}
+
+func (s *Store) RegistrationPath() string {
+	return filepath.Join(s.dir, "registration.json")
+}
+
+func (s *Store) LoadRegistration() (RegistrationState, error) {
+	var registration RegistrationState
+	if err := readJSON(s.RegistrationPath(), &registration); err != nil {
+		return RegistrationState{}, err
+	}
+	if err := validateRegistrationState(registration); err != nil {
+		return RegistrationState{}, err
+	}
+	return registration, nil
+}
+
+func (s *Store) SaveRegistration(registration RegistrationState) error {
+	registration.SchemaVersion = SchemaVersion
+	if err := validateRegistrationState(registration); err != nil {
+		return err
+	}
+	return writeJSON0600(s.RegistrationPath(), registration)
+}
+
+func (s *Store) ClearRegistration() error {
+	err := os.Remove(s.RegistrationPath())
+	if err == nil || errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	return fault.New(fault.CodeStateIO, "clear registration state", err)
 }
 
 func (s *Store) LoadCheckpoint() (Checkpoint, error) {
@@ -331,6 +410,12 @@ func (s *Store) ClearEnrollmentSecret() error {
 	return fault.New(fault.CodeStateIO, "clear enrollment secret", err)
 }
 
+// ValidateEnrollmentSecret validates a staged enrollment response without
+// writing it. Registration uses this before caching an approved handoff.
+func ValidateEnrollmentSecret(secret EnrollmentSecret) error {
+	return validateEnrollmentSecret(secret)
+}
+
 func validateEnrollmentSecret(secret EnrollmentSecret) error {
 	tokenRaw, tokenErr := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(secret.EnrollmentToken, "xenr_"))
 	publicKey, publicKeyErr := base64.StdEncoding.DecodeString(secret.WireGuardPublicKey)
@@ -341,6 +426,37 @@ func validateEnrollmentSecret(secret EnrollmentSecret) error {
 		return fault.New(fault.CodeStateIO, "validate enrollment signing keys", err)
 	}
 	return nil
+}
+
+func validateRegistrationState(registration RegistrationState) error {
+	parsed, parseErr := url.Parse(registration.Controller)
+	privateKey, privateErr := base64.StdEncoding.DecodeString(registration.WireGuardPrivateKey)
+	publicKey, publicErr := base64.StdEncoding.DecodeString(registration.WireGuardPublicKey)
+	if registration.SchemaVersion != SchemaVersion || parseErr != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || registration.DeviceID == "" || registration.NetworkID == "" || registration.Platform == "" || privateErr != nil || len(privateKey) != 32 || publicErr != nil || len(publicKey) != 32 || base64.StdEncoding.EncodeToString(privateKey) != registration.WireGuardPrivateKey || base64.StdEncoding.EncodeToString(publicKey) != registration.WireGuardPublicKey || registration.CreatedAt.IsZero() || registration.UpdatedAt.IsZero() || registration.CreatedAt.Location() != time.UTC || registration.UpdatedAt.Location() != time.UTC || registration.UpdatedAt.Before(registration.CreatedAt) {
+		return fault.New(fault.CodeStateIO, "validate registration state", nil)
+	}
+	if registration.Status != "creating" && registration.Status != "pending" && registration.Status != "approved" {
+		return fault.New(fault.CodeStateIO, "validate registration state", nil)
+	}
+	if registration.Status == "creating" {
+		if registration.RegistrationID != "" || registration.RegistrationToken != "" || !registration.ExpiresAt.IsZero() || registration.Interval != 0 || registration.Approved != nil {
+			return fault.New(fault.CodeStateIO, "validate registration state", nil)
+		}
+	} else if !registrationIDPattern.MatchString(registration.RegistrationID) || !validRegistrationToken(registration.RegistrationToken) || registration.ExpiresAt.IsZero() || registration.ExpiresAt.Location() != time.UTC || registration.Interval < 5 || registration.Interval > 30 {
+		return fault.New(fault.CodeStateIO, "validate registration state", nil)
+	}
+	if registration.Status == "approved" && registration.Approved == nil || registration.Status != "approved" && registration.Approved != nil {
+		return fault.New(fault.CodeStateIO, "validate registration state", nil)
+	}
+	return nil
+}
+
+func validRegistrationToken(value string) bool {
+	if value != strings.TrimSpace(value) || !strings.HasPrefix(value, "xrt_") {
+		return false
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(value, "xrt_"))
+	return err == nil && len(raw) == 32
 }
 
 func validEnrollmentScope(values []string) bool {

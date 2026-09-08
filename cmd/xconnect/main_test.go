@@ -30,6 +30,23 @@ import (
 
 const cliTestToken = "cli-secret-token"
 
+func TestRegisterCLIRequiresHTTPSControllerAndPublicNetwork(t *testing.T) {
+	for _, args := range [][]string{
+		{"register"},
+		{"register", "--controller", "http://localhost:8080", "--network", "net_public"},
+		{"register", "--controller", "https://accounts.example"},
+	} {
+		var stdout, stderr bytes.Buffer
+		err := runWithRuntimeFactory(t.Context(), args, &stdout, &stderr, http.DefaultClient, func(string) overlayruntime.Interface { return &overlayruntime.Fake{} })
+		if fault.Code(err) != fault.CodeInvalidInput {
+			t.Fatalf("args=%v code=%q err=%v", args, fault.Code(err), err)
+		}
+		if stdout.Len() != 0 {
+			t.Fatalf("args=%v unexpectedly wrote stdout=%q", args, stdout.String())
+		}
+	}
+}
+
 func TestJoinAcceptsControllerPositionallyAndKeepsSecretsOutOfOutput(t *testing.T) {
 	var ackCalls atomic.Int32
 	server := newCLITestServer(t, false, &ackCalls)

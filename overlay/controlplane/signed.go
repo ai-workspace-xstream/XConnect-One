@@ -160,6 +160,8 @@ const (
 	contractErrorSignedCapability
 	contractErrorInviteExchange
 	contractErrorEnrollment
+	contractErrorRegistration
+	contractErrorRegistrationCreate
 )
 
 func (c *Client) doContractWithBearer(ctx context.Context, method, path string, query url.Values, payload any, headers http.Header, bearer string, errorMode contractErrorMode) (int, http.Header, []byte, error) {
@@ -209,6 +211,10 @@ func (c *Client) doContractWithAuthorization(ctx context.Context, method, path s
 		return response.StatusCode, response.Header.Clone(), nil, nil
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		if errorMode == contractErrorRegistration || errorMode == contractErrorRegistrationCreate {
+			rawError, _ := io.ReadAll(io.LimitReader(response.Body, 64<<10))
+			return response.StatusCode, nil, nil, registrationError(response.StatusCode, rawError, errorMode == contractErrorRegistrationCreate)
+		}
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 64<<10))
 		if errorMode == contractErrorSignedCapability && (response.StatusCode == http.StatusNotFound || response.StatusCode == http.StatusServiceUnavailable) {
 			return response.StatusCode, nil, nil, fault.New(fault.CodeSignedConfigUnavailable, "signed config capability unavailable", nil)

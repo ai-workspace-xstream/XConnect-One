@@ -170,7 +170,7 @@ func TestDesktopApplyStartsVerifiedRuntimeAndSecuresArtifacts(t *testing.T) {
 		if err != nil {
 			t.Fatalf("stat %s: %v", path, err)
 		}
-		if info.Mode().Perm() != 0o600 {
+		if !privateRegularFile(path) {
 			t.Fatalf("%s permissions = %04o, want 0600", path, info.Mode().Perm())
 		}
 	}
@@ -179,7 +179,7 @@ func TestDesktopApplyStartsVerifiedRuntimeAndSecuresArtifacts(t *testing.T) {
 		if err != nil {
 			t.Fatalf("stat %s: %v", path, err)
 		}
-		if info.Mode().Perm() != 0o700 {
+		if !privateDirectory(path) {
 			t.Fatalf("%s permissions = %04o, want 0700", path, info.Mode().Perm())
 		}
 	}

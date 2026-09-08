@@ -50,7 +50,7 @@ func platformRuntime(goos, stateDirectory string) overlayruntime.Interface {
 	case "darwin":
 		return overlayruntime.NewMacOSDesktop(stateDirectory)
 	case "windows":
-		return overlayruntime.NewProtectedHost("windows_service_host_required", nil)
+		return overlayruntime.NewWindowsDesktop(stateDirectory)
 	case "ios", "android":
 		return overlayruntime.NewProtectedHost("mobile_protected_tunnel_host_required", nil)
 	}

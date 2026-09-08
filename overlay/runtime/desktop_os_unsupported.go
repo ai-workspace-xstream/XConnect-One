@@ -1,15 +1,16 @@
-//go:build !linux && !darwin
+//go:build !linux && !darwin && !windows
 
 package runtime
 
 import (
 	"context"
 	"errors"
+	"os"
 )
 
-// unsupportedDesktopBackend keeps cross-platform builds safe. The external
-// command runtime is constructed only on Linux; Apple hosts must provide a
-// Packet Tunnel host runtime and other platforms remain fail-closed.
+// unsupportedDesktopBackend keeps cross-platform builds safe. Apple hosts
+// must provide a Packet Tunnel host runtime and other platforms remain
+// fail-closed.
 type unsupportedDesktopBackend struct{}
 
 func newOSDesktopBackend() *unsupportedDesktopBackend { return &unsupportedDesktopBackend{} }
@@ -47,4 +48,20 @@ func (b *unsupportedDesktopBackend) LoopbackAvailable(string) (bool, error) {
 
 func (b *unsupportedDesktopBackend) LoopbackOwned(processIdentity, string) (bool, error) {
 	return false, errors.New("external desktop runtime is Linux-only")
+}
+
+func secureDirectoryPlatform(path string) error { return os.Chmod(path, 0o700) }
+
+func secureFilePlatform(path string) error { return os.Chmod(path, 0o600) }
+
+func replaceRuntimeFile(source, target string) error { return os.Rename(source, target) }
+
+func privateDirectoryPlatform(path string) bool {
+	info, err := os.Lstat(path)
+	return err == nil && info.IsDir() && info.Mode().Perm() == 0o700
+}
+
+func privateRegularFilePlatform(path string) bool {
+	info, err := os.Lstat(path)
+	return err == nil && info.Mode().IsRegular() && info.Mode().Perm() == 0o600
 }

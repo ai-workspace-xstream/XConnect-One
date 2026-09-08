@@ -15,14 +15,16 @@ modifying the source working tree:
 
 Changes from the pinned source: rewrite `go_core/overlay/` imports to
 `github.com/ai-workspace-xstream/XConnect-One/overlay/` and mark modified Go files;
-replace the application module definition with a standalone standard-library-only
-module; add repository documentation, ignore rules and CI. Safety changes disable
-cached `up` in favor of verified `sync`, route unhealthy `down` through owned
-cleanup, preflight interface names, record interface indexes and refuse blind
-cleanup after failed startup. Regression tests cover these changes, and original
-lifecycle tests were adapted to the intentionally restricted `up` behavior.
-Protocol, session, signature and generation-floor semantics remain inherited.
-No upstream NOTICE file was present at the source commit.
+replace the application module definition with a standalone module and minimal
+Windows `x/sys` bindings; add repository documentation, ignore rules and CI.
+Safety changes disable cached `up` in favor of verified `sync`, route unhealthy
+`down` through owned cleanup, preflight interface names, record interface indexes
+and refuse blind cleanup after failed startup. The Windows backend uses the
+official WireGuard tunnel-service CLI, native process identity checks and protected
+NTFS DACLs. Regression tests cover these changes, and original lifecycle tests were
+adapted to the intentionally restricted `up` behavior. Protocol, session, signature
+and generation-floor semantics remain inherited. No upstream NOTICE file was
+present at the source commit.
 
 The application Go module's Flutter/FFI, tray, embedded Xray, libXray local
 replacement, and unrelated third-party dependencies are not part of this

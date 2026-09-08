@@ -287,3 +287,19 @@ func canonicalPath(path string) string {
 	}
 	return filepath.Clean(path)
 }
+
+func secureDirectoryPlatform(path string) error { return os.Chmod(path, 0o700) }
+
+func secureFilePlatform(path string) error { return os.Chmod(path, 0o600) }
+
+func replaceRuntimeFile(source, target string) error { return os.Rename(source, target) }
+
+func privateDirectoryPlatform(path string) bool {
+	info, err := os.Lstat(path)
+	return err == nil && info.IsDir() && info.Mode().Perm() == 0o700
+}
+
+func privateRegularFilePlatform(path string) bool {
+	info, err := os.Lstat(path)
+	return err == nil && info.Mode().IsRegular() && info.Mode().Perm() == 0o600
+}

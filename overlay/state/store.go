@@ -361,10 +361,14 @@ func validEnrollmentScope(values []string) bool {
 }
 
 func readJSON(path string, target any) error {
-	file, err := os.Open(path)
-	if errors.Is(err, os.ErrNotExist) {
+	info, statErr := os.Lstat(path)
+	if errors.Is(statErr, os.ErrNotExist) {
 		return ErrNotFound
 	}
+	if statErr != nil || !privateStateRegular(path, info) {
+		return fault.New(fault.CodeStateIO, "validate overlay state permissions", statErr)
+	}
+	file, err := os.Open(path)
 	if err != nil {
 		return fault.New(fault.CodeStateIO, "open overlay state", err)
 	}
@@ -385,7 +389,7 @@ func writeJSON0600(path string, value any) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fault.New(fault.CodeStateIO, "create overlay state directory", err)
 	}
-	if err := os.Chmod(dir, 0o700); err != nil {
+	if err := secureStateDirectory(dir); err != nil {
 		return fault.New(fault.CodeStateIO, "secure overlay state directory", err)
 	}
 	temporary, err := os.CreateTemp(dir, ".xconnect-state-*")
@@ -400,7 +404,7 @@ func writeJSON0600(path string, value any) error {
 			_ = os.Remove(temporaryPath)
 		}
 	}()
-	if err := temporary.Chmod(0o600); err != nil {
+	if err := secureStateFile(temporaryPath); err != nil {
 		return fault.New(fault.CodeStateIO, "secure overlay state file", err)
 	}
 	encoder := json.NewEncoder(temporary)
@@ -414,10 +418,10 @@ func writeJSON0600(path string, value any) error {
 	if err := temporary.Close(); err != nil {
 		return fault.New(fault.CodeStateIO, "close overlay state", err)
 	}
-	if err := os.Rename(temporaryPath, path); err != nil {
+	if err := replaceStateFile(temporaryPath, path); err != nil {
 		return fault.New(fault.CodeStateIO, "commit overlay state", err)
 	}
-	if err := os.Chmod(path, 0o600); err != nil {
+	if err := secureStateFile(path); err != nil {
 		return fault.New(fault.CodeStateIO, "secure committed overlay state", err)
 	}
 	committed = true
@@ -429,7 +433,8 @@ func ValidatePermissions(path string, expected os.FileMode) error {
 	if err != nil {
 		return err
 	}
-	if got := info.Mode().Perm(); got != expected {
+	got := info.Mode().Perm()
+	if !statePermissionOK(path, info, expected) {
 		return fmt.Errorf("permissions are %04o, want %04o", got, expected)
 	}
 	return nil

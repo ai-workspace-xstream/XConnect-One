@@ -31,12 +31,8 @@ func TestCheckpointAndLastKnownUsePrivatePermissions(t *testing.T) {
 	if err := state.ValidatePermissions(store.CheckpointPath(), 0o600); err != nil {
 		t.Fatalf("checkpoint permissions: %v", err)
 	}
-	info, err := os.Stat(store.Directory())
-	if err != nil {
-		t.Fatalf("stat state directory: %v", err)
-	}
-	if info.Mode().Perm() != 0o700 {
-		t.Fatalf("state directory permissions = %04o", info.Mode().Perm())
+	if err := state.ValidatePermissions(store.Directory(), 0o700); err != nil {
+		t.Fatalf("state directory permissions: %v", err)
 	}
 }
 

@@ -1,0 +1,4 @@
+# Go's formatter emits LF on every supported platform.  Keep source checkout
+# deterministic on Windows so the CI formatting gate reflects code changes,
+# not Git's CRLF conversion.
+*.go text eol=lf

@@ -73,11 +73,24 @@ func TestAppBridgeMapsSupportedOperationsToExistingCLI(t *testing.T) {
 		_, _ = io.WriteString(stdout, `{"joined":true}`)
 		return nil
 	}
-	response := handleAppBridgeRequest(t.Context(), []byte(`{"protocol_version":"1","request_id":"sync-1","method":"sync","params":{"state_dir":"/var/lib/xconnect-app/one","signed_config_v2":true}}`), runner)
+	stateDir := filepath.Join(t.TempDir(), "one")
+	request, err := json.Marshal(map[string]any{
+		"protocol_version": "1",
+		"request_id":       "sync-1",
+		"method":           "sync",
+		"params": map[string]any{
+			"state_dir":        stateDir,
+			"signed_config_v2": true,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := handleAppBridgeRequest(t.Context(), request, runner)
 	if response.Error != nil {
 		t.Fatalf("sync error: %#v", response.Error)
 	}
-	want := []string{"sync", "--state-dir", "/var/lib/xconnect-app/one", "--signed-config-v2"}
+	want := []string{"sync", "--state-dir", stateDir, "--signed-config-v2"}
 	if !reflect.DeepEqual(gotArgs, want) {
 		t.Fatalf("args = %#v, want %#v", gotArgs, want)
 	}
@@ -91,8 +104,19 @@ func TestAppBridgeRedactsRunnerErrorsAndRequestSecrets(t *testing.T) {
 	runner := func(_ context.Context, _ []string, _ io.Writer, _ io.Writer, _ *http.Client) error {
 		return fault.New(fault.CodeControlPlaneRejected, "exchange "+secret, errors.New("authorization: bearer private-token"))
 	}
-	request := `{"protocol_version":"1","request_id":"join-1","method":"join","params":{"state_dir":"/var/lib/xconnect-app/one","invite":"` + secret + `"}}`
-	response := handleAppBridgeRequest(t.Context(), []byte(request), runner)
+	request, err := json.Marshal(map[string]any{
+		"protocol_version": "1",
+		"request_id":       "join-1",
+		"method":           "join",
+		"params": map[string]any{
+			"state_dir": filepath.Join(t.TempDir(), "one"),
+			"invite":    secret,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := handleAppBridgeRequest(t.Context(), request, runner)
 	raw, err := json.Marshal(response)
 	if err != nil {
 		t.Fatalf("marshal response: %v", err)
@@ -119,7 +143,18 @@ func TestAppBridgeRejectsNonOpaqueRunnerCode(t *testing.T) {
 	runner := func(_ context.Context, _ []string, _ io.Writer, _ io.Writer, _ *http.Client) error {
 		return appBridgeTestCodedError{code: "failure-" + secret}
 	}
-	response := handleAppBridgeRequest(t.Context(), []byte(`{"protocol_version":"1","request_id":"status-1","method":"status","params":{"state_dir":"/var/lib/xconnect-app/one"}}`), runner)
+	request, err := json.Marshal(map[string]any{
+		"protocol_version": "1",
+		"request_id":       "status-1",
+		"method":           "status",
+		"params": map[string]any{
+			"state_dir": filepath.Join(t.TempDir(), "one"),
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := handleAppBridgeRequest(t.Context(), request, runner)
 	if response.Error == nil || response.Error.Code != fault.CodeInvalidResponse {
 		t.Fatalf("response = %#v", response)
 	}

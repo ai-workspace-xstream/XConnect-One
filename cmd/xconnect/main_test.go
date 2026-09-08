@@ -137,7 +137,7 @@ func TestProductionJoinFailsClosedWithoutPlatformRuntimeAndDoesNotAck(t *testing
 	// to mutate networking when run as root on a provisioned Linux host.
 	t.Setenv("PATH", t.TempDir())
 	wantCode := fault.CodeRuntimeUnavailable
-	if runtime.GOOS == "linux" || runtime.GOOS == "darwin" {
+	if runtime.GOOS == "linux" || runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
 		wantCode = fault.CodeRuntimeDependency
 	}
 	var ackCalls atomic.Int32
@@ -177,8 +177,21 @@ func TestPlatformRuntimeSelectsControlledClientRuntime(t *testing.T) {
 	if _, ok := darwinRuntime.(*overlayruntime.Desktop); !ok {
 		t.Fatalf("darwin runtime = %T, want desktop runtime", darwinRuntime)
 	}
+	if runtime.GOOS == "windows" {
+		if _, ok := platformRuntime("windows", t.TempDir()).(*overlayruntime.Desktop); !ok {
+			t.Fatalf("windows runtime = %T, want external desktop runtime", platformRuntime("windows", t.TempDir()))
+		}
+	} else {
+		runtimeHost := platformRuntime("windows", t.TempDir())
+		diagnostics, err := runtimeHost.Diagnose(t.Context())
+		if err != nil || len(diagnostics) != 2 || diagnostics[1].Code != "windows_service_host_required" || !diagnostics[1].Healthy {
+			t.Fatalf("windows diagnostics=%#v err=%v", diagnostics, err)
+		}
+		if _, err := runtimeHost.Apply(t.Context(), overlayruntime.ApplyRequest{}); fault.Code(err) != fault.CodeRuntimeUnavailable {
+			t.Fatalf("windows apply code=%q err=%v", fault.Code(err), err)
+		}
+	}
 	for _, test := range []struct{ goos, code string }{
-		{goos: "windows", code: "windows_service_host_required"},
 		{goos: "ios", code: "mobile_protected_tunnel_host_required"},
 		{goos: "android", code: "mobile_protected_tunnel_host_required"},
 	} {

@@ -63,9 +63,10 @@ type desktopBackend interface {
 	LoopbackOwned(processIdentity, string) (bool, error)
 }
 
-// Desktop applies the external Xray and WireGuard runtime as one transaction.
-// Linux and macOS provide their own host backend; the backend is injectable so
-// tests never start processes or mutate host networking.
+// Desktop applies the external Xray and WireGuard desktop runtime as one
+// transaction. The backend is injectable so tests never start processes or
+// mutate host networking. Linux uses wg-quick; Windows maps the same logical
+// operations to WireGuard for Windows tunnel services.
 type Desktop struct {
 	dir              string
 	backend          desktopBackend
@@ -79,10 +80,27 @@ func NewLinuxDesktop(stateDirectory string) *Desktop {
 }
 
 // NewMacOSDesktop runs the same controlled-client lifecycle through the
-// macOS external Xray/WireGuard toolchain. It is intentionally a CLI runtime,
-// independent of the optional XConnect APP plugin host.
+// macOS external Xray/WireGuard toolchain. It is intentionally a standalone
+// CLI runtime, independent of the optional XConnect APP plugin host.
 func NewMacOSDesktop(stateDirectory string) *Desktop {
 	return newDesktop(stateDirectory, newOSDesktopBackend())
+}
+
+// wireGuardServiceBackend is implemented by platforms whose WireGuard
+// lifecycle is represented by an OS service rather than a process/interface
+// pair. The optional interface keeps the Linux backend and its contract
+// unchanged while allowing Windows to refuse or remove a service that has no
+// visible adapter yet.
+type wireGuardServiceBackend interface {
+	WireGuardServiceState(interfaceName, executable, configPath string) (exists, owned bool, err error)
+}
+
+func (r *Desktop) wireGuardServiceState(interfaceName, executable, configPath string) (bool, bool, error) {
+	backend, ok := r.backend.(wireGuardServiceBackend)
+	if !ok {
+		return false, false, nil
+	}
+	return backend.WireGuardServiceState(interfaceName, executable, configPath)
 }
 
 func newDesktop(stateDirectory string, backend desktopBackend) *Desktop {
@@ -383,7 +401,7 @@ func (r *Desktop) prepare(request ApplyRequest, xrayPath string) (desktopManifes
 	if err != nil {
 		return desktopManifest{}, fault.New(fault.CodeStateIO, "create runtime revision", err)
 	}
-	if err := os.Chmod(revisionDirectory, 0o700); err != nil {
+	if err := secureDirectory(revisionDirectory); err != nil {
 		_ = os.RemoveAll(revisionDirectory)
 		return desktopManifest{}, fault.New(fault.CodeStateIO, "secure runtime revision", err)
 	}
@@ -430,6 +448,16 @@ func (r *Desktop) prepare(request ApplyRequest, xrayPath string) (desktopManifes
 }
 
 func (r *Desktop) startManifest(ctx context.Context, manifest desktopManifest, dependencies desktopDependencies) (desktopManifest, error) {
+	serviceExists, serviceOwned, serviceErr := r.wireGuardServiceState(manifest.Interface, dependencies.wgQuick, manifest.WGConfigPath)
+	if serviceErr != nil {
+		return desktopManifest{}, fault.New(fault.CodeRuntimeProcessStale, "inspect WireGuard tunnel service", nil)
+	}
+	if serviceExists {
+		if !serviceOwned {
+			return desktopManifest{}, fault.New(fault.CodeRuntimeProcessStale, "refuse unowned WireGuard tunnel service", nil)
+		}
+		return desktopManifest{}, fault.New(fault.CodeRuntimeApplyFailed, "WireGuard tunnel service already exists", nil)
+	}
 	index, err := r.backend.InterfaceIndex(manifest.Interface)
 	if err != nil || index != 0 {
 		return desktopManifest{}, fault.New(fault.CodeRuntimeApplyFailed, "WireGuard interface already exists or cannot be inspected", nil)
@@ -482,12 +510,16 @@ func (r *Desktop) stopManifest(ctx context.Context, manifest desktopManifest, de
 	if err != nil {
 		return err
 	}
+	serviceExists, serviceOwned, serviceErr := r.wireGuardServiceState(manifest.Interface, dependencies.wgQuick, manifest.WGConfigPath)
+	if serviceErr != nil || serviceExists && !serviceOwned || serviceExists && !manifest.WireGuardUp {
+		return fault.New(fault.CodeRuntimeProcessStale, "verify WireGuard tunnel service ownership", nil)
+	}
 	if manifest.WireGuardUp {
 		index, err := r.backend.InterfaceIndex(manifest.Interface)
 		if err != nil || (index != 0 && (manifest.InterfaceIndex == 0 || index != manifest.InterfaceIndex)) {
 			return fault.New(fault.CodeRuntimeProcessStale, "verify WireGuard interface identity", nil)
 		}
-		if index != 0 {
+		if index != 0 || serviceExists {
 			if err := r.run(ctx, dependencies.wgQuick, "down", manifest.WGConfigPath); err != nil {
 				return fault.New(fault.CodeRuntimeApplyFailed, "stop WireGuard runtime", nil)
 			}
@@ -568,8 +600,7 @@ func (r *Desktop) manifestMetadataTrusted(manifest desktopManifest, dependencies
 	if hex.EncodeToString(wgDigest[:]) != manifest.WGConfigSHA256 {
 		return false
 	}
-	directoryInfo, err := os.Lstat(directory)
-	if err != nil || !directoryInfo.IsDir() || directoryInfo.Mode().Perm() != 0o700 {
+	if !privateDirectory(directory) {
 		return false
 	}
 	host, _, err := net.SplitHostPort(manifest.LoopbackAddress)
@@ -635,7 +666,7 @@ func (r *Desktop) loadManifest(path string) (desktopManifest, error) {
 	if errors.Is(statErr, os.ErrNotExist) {
 		return desktopManifest{}, errRuntimeArtifactNotFound
 	}
-	if statErr != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0o600 {
+	if statErr != nil || !info.Mode().IsRegular() || !privateRegularFile(path) {
 		return desktopManifest{}, fault.New(fault.CodeStateIO, "validate runtime metadata permissions", statErr)
 	}
 	file, err := os.Open(path)
@@ -656,7 +687,12 @@ func (r *Desktop) loadManifest(path string) (desktopManifest, error) {
 
 func privateRegularFile(path string) bool {
 	info, err := os.Lstat(path)
-	return err == nil && info.Mode().IsRegular() && info.Mode().Perm() == 0o600
+	return err == nil && info.Mode().IsRegular() && privateRegularFilePlatform(path)
+}
+
+func privateDirectory(path string) bool {
+	info, err := os.Lstat(path)
+	return err == nil && info.IsDir() && privateDirectoryPlatform(path)
 }
 
 func removeOwnedRegularFile(path string) error {
@@ -664,7 +700,7 @@ func removeOwnedRegularFile(path string) error {
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
-	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0o600 {
+	if err != nil || !info.Mode().IsRegular() || !privateRegularFile(path) {
 		return fault.New(fault.CodeStateIO, "validate owned runtime file", err)
 	}
 	if err := os.Remove(path); err != nil {
@@ -747,7 +783,7 @@ func secureDirectory(path string) error {
 	if err := os.MkdirAll(path, 0o700); err != nil {
 		return fault.New(fault.CodeStateIO, "create runtime directory", err)
 	}
-	if err := os.Chmod(path, 0o700); err != nil {
+	if err := secureDirectoryPlatform(path); err != nil {
 		return fault.New(fault.CodeStateIO, "secure runtime directory", err)
 	}
 	return nil
@@ -769,7 +805,7 @@ func writeFile0600(path string, raw []byte) error {
 			_ = os.Remove(temporaryPath)
 		}
 	}()
-	if err := temporary.Chmod(0o600); err != nil {
+	if err := secureFilePlatform(temporaryPath); err != nil {
 		return fault.New(fault.CodeStateIO, "secure runtime artifact", err)
 	}
 	if _, err := temporary.Write(raw); err != nil {
@@ -781,10 +817,10 @@ func writeFile0600(path string, raw []byte) error {
 	if err := temporary.Close(); err != nil {
 		return fault.New(fault.CodeStateIO, "close runtime artifact", err)
 	}
-	if err := os.Rename(temporaryPath, path); err != nil {
+	if err := replaceRuntimeFile(temporaryPath, path); err != nil {
 		return fault.New(fault.CodeStateIO, "commit runtime artifact", err)
 	}
-	if err := os.Chmod(path, 0o600); err != nil {
+	if err := secureFilePlatform(path); err != nil {
 		return fault.New(fault.CodeStateIO, "secure runtime artifact", err)
 	}
 	committed = true

@@ -38,12 +38,13 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o dist/xconnect-linux-
 CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -o dist/xconnect-linux-arm64 ./cmd/xconnect
 CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath -o dist/xconnect-macos-arm64 ./cmd/xconnect
 CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -trimpath -o dist/xconnect-macos-amd64 ./cmd/xconnect
+CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -o dist/xconnect-windows-amd64.exe ./cmd/xconnect
 ```
 
-The CI workflow tests on Linux and macOS, runs the race detector and vet, and
-publishes Linux and macOS controlled-client binaries. Tests use HTTP fixtures
-and injected runtime backends; they do not establish a live VPN or change the
-host network.
+The CI workflow tests Linux, macOS and Windows builds, runs the race detector
+and vet, and publishes their controlled-client binaries. Tests use HTTP
+fixtures and injected runtime backends; they do not establish a live VPN or
+change the host network.
 
 ## Linux prerequisites
 
@@ -91,6 +92,14 @@ the trusted Xray and WireGuard executables (or use the deployment mechanism to
 place them in an administrator-visible path). The CLI creates only its named,
 owned WireGuard interface and files beneath its explicit state directory; it
 does not read, alter, or rely on XConnect APP state.
+
+## Windows prerequisites
+
+See [docs/windows-runtime.md](docs/windows-runtime.md). Windows uses the same
+CLI lifecycle and signed configuration contract as Linux and macOS, but
+requires an elevated native `amd64` process, external `xray.exe`, and WireGuard
+for Windows' `wireguard.exe` and `wg.exe`. The CLI does not install or update
+those external runtimes.
 
 ## Enroll, sync, and connect
 
@@ -226,7 +235,10 @@ owned-resource cleanup. Never edit generated files while the runtime is active.
   userspace/kernel support (for example the supported Homebrew toolchain). It
   does not use XConnect APP state. The APP may optionally host the same CLI as
   a plugin, but that plugin mode does not change the standalone CLI contract.
-- Windows/mobile tunnel hosts are not shipped.
+- Windows is a supported native `amd64` external-runtime controlled-client.
+  It manages only its named WireGuard tunnel service and protected state; see
+  [docs/windows-runtime.md](docs/windows-runtime.md). Mobile tunnel hosts are
+  not shipped.
 - Real Linux Xray/WireGuard execution and end-to-end networking were not tested
   during extraction on the macOS development host. Passing tests and Linux
   cross-builds are not live-network certification. Runtime subprocess output

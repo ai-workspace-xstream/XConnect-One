@@ -113,7 +113,7 @@ func (s *Store) AcquireOperation(ctx context.Context, operation string) (*Operat
 	if err := os.MkdirAll(s.dir, 0o700); err != nil {
 		return nil, fault.New(fault.CodeStateIO, "create operation directory", err)
 	}
-	if err := os.Chmod(s.dir, 0o700); err != nil {
+	if err := secureStateDirectory(s.dir); err != nil {
 		return nil, fault.New(fault.CodeStateIO, "secure operation directory", err)
 	}
 	random := make([]byte, 16)
@@ -128,6 +128,10 @@ func (s *Store) AcquireOperation(ctx context.Context, operation string) (*Operat
 		}
 		err := os.Mkdir(lockPath, 0o700)
 		if err == nil {
+			if err := secureStateDirectory(lockPath); err != nil {
+				_ = os.RemoveAll(lockPath)
+				return nil, fault.New(fault.CodeStateIO, "secure operation lock", err)
+			}
 			owner := operationOwner{SchemaVersion: SchemaVersion, Token: token, Operation: operation, StartedAt: time.Now().UTC()}
 			if err := writeJSON0600(filepath.Join(lockPath, "owner.json"), owner); err != nil {
 				_ = os.RemoveAll(lockPath)
@@ -208,7 +212,7 @@ func (s *Store) ClearOwnedState() (CleanupResult, error) {
 		if errors.Is(err, os.ErrNotExist) {
 			continue
 		}
-		if err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0o600 {
+		if err != nil || !privateStateRegular(path, info) {
 			return CleanupResult{}, fault.New(fault.CodeStateIO, "validate owned state cleanup", err)
 		}
 		if err := os.Remove(path); err != nil {

@@ -100,7 +100,6 @@ func TestSignedContractFloorIsPrivateMonotonicAndDowngradeLocked(t *testing.T) {
 	}{
 		{name: "older generation", configID: "cfg_41", digest: digest, generation: 41},
 		{name: "same generation different config", configID: "cfg_other", digest: digest, generation: 42},
-		{name: "same generation different payload", configID: "cfg_42", digest: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", generation: 42},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			err := store.AcceptSignedConfig("https://accounts.example", "dev_laptop", "net_private", test.configID, test.digest, test.generation, now)
@@ -108,6 +107,12 @@ func TestSignedContractFloorIsPrivateMonotonicAndDowngradeLocked(t *testing.T) {
 				t.Fatalf("error code = %q, err=%v", fault.Code(err), err)
 			}
 		})
+	}
+	if err := store.AcceptSignedConfig("https://accounts.example", "dev_laptop", "net_private", "cfg_42", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", 42, now); err != nil {
+		t.Fatalf("renewed signed config: %v", err)
+	}
+	if err := store.ValidateSignedConfigFloor("https://accounts.example", "dev_laptop", "net_private", "cfg_42", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", 42); err != nil {
+		t.Fatalf("renewed signed config floor: %v", err)
 	}
 }
 

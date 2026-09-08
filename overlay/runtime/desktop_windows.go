@@ -613,17 +613,16 @@ func matchesWindowsPrivateDACL(sddl string) bool {
 	}
 	// `AI` records auto-inheritance metadata and does not add a principal.
 	body = strings.TrimPrefix(body, "AI")
-	for _, ace := range []string{
-		"(A;;FA;;;SY)",
-		"(A;;FA;;;BA)",
-		"(A;;FA;;;" + owner + ")",
-	} {
+	for _, ace := range []string{"(A;;FA;;;SY)", "(A;;FA;;;BA)"} {
 		if strings.Count(body, ace) != 1 {
 			return false
 		}
 		body = strings.Replace(body, ace, "", 1)
 	}
-	return body == ""
+	// Depending on object inheritance, Windows preserves the original `OW`
+	// alias or renders it as the resolved descriptor owner. Both forms grant
+	// full access solely to the owner and are safe; reject every other ACE.
+	return body == "(A;;FA;;;OW)" || body == "(A;;FA;;;"+owner+")"
 }
 
 func windowsSDDLOwner(sddl string) string {

@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"strings"
 	"testing"
 
 	"golang.org/x/sys/windows"
@@ -49,16 +48,17 @@ func TestWindowsPrivateRuntimeSDDLIsProtectedAndAdministratorBound(t *testing.T)
 }
 
 func TestMatchesWindowsPrivateDACL(t *testing.T) {
-	owner := "S-1-5-21-100-200-300-1001"
-	valid := "O:" + owner + "G:BAD:PAI(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;" + owner + ")"
+	owner := "BA"
+	valid := "O:" + owner + "D:PAI(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;OW)"
 	if !matchesWindowsPrivateDACL(valid) {
 		t.Fatal("expected protected DACL with only SYSTEM, Administrators, and owner access to be trusted")
 	}
 	if matchesWindowsPrivateDACL("O:" + owner + "D:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;WD)") {
 		t.Fatal("world-readable DACL must not be trusted")
 	}
-	if !strings.Contains(valid, owner) {
-		t.Fatal("test descriptor must contain the owner SID")
+	resolvedOwner := "S-1-5-21-100-200-300-1001"
+	if !matchesWindowsPrivateDACL("O:" + resolvedOwner + "D:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;" + resolvedOwner + ")") {
+		t.Fatal("concrete owner SID should be trusted as the owner-only ACE")
 	}
 }
 

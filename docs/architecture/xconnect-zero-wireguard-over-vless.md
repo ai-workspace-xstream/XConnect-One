@@ -1,9 +1,26 @@
-# XConnect Zero WireGuard-over-VLESS architecture
+# XConnect Gateway/One data plane and Zero WireGuard-over-VLESS architecture
 
 Status: normative design for the standalone XConnect One CLI and XConnect
 Gateway data path. This document separates product ownership from runtime
 process ownership. It does not replace a signed configuration, create a
 network, or authorize a device.
+
+## Delivery order
+
+The first delivery is a control-plane-free transport lab. It automates the
+external runtime on Gateway, Linux One, Windows One and an opt-in macOS One,
+then proves the data path before Zero enrollment is introduced:
+
+```text
+Gateway Xray server + Gateway WireGuard peers
+        ↕ VLESS/TLS/XUDP
+One external xray/tproxy + One WireGuard peer (per platform)
+```
+
+This lab proves runtime ownership, routing, ports, exact-peer handshakes and
+private ping/HTTP. It creates no Zero device, sends no ACK, and is not an
+enrollment result. Its temporary configuration is replaced—not supplemented—by
+signed configuration only after the transport baseline passes.
 
 ## Design rules
 
@@ -36,6 +53,38 @@ network, or authorize a device.
 | External Xray | VLESS/TLS/XUDP transport for the process started by its owner | Zero data model, peer authorization, address allocation |
 | WireGuard | encrypted overlay interface, peer keys, addresses and allowed routes | VLESS transport, policy issuance, identity approval |
 | XConnect APP | its own UI, TUN, Xray/SOCKS/VLESS runtime and plugin host | One's state directory, One's credentials and One-owned interfaces |
+
+## Phase 0: transport-lab automation
+
+The lab creates disposable Linux Gateway and Linux/Windows One nodes with a
+strict TTL. macOS uses an explicitly authorized local or self-hosted runner;
+it cannot be represented truthfully by a GitHub-hosted runner without the
+required administrator operations.
+
+1. Every node generates its WireGuard private key locally in its protected
+   state directory. The orchestrator exchanges public keys only.
+2. Gateway starts its TLS/VLESS Xray server, WireGuard interface and exact
+   `/32` peer table for each participating One.
+3. Each One starts its owned external `xray/tproxy` loopback relay on
+   `127.0.0.1:51830`, then its WireGuard interface whose endpoint is that
+   relay—not the Gateway UDP port.
+4. The pipeline checks Xray configuration and service health, the exact
+   WireGuard peer handshake, a private ping, and a run-specific private HTTP
+   response for each platform.
+5. Failure or expiry removes only the lab-owned processes, interfaces,
+   temporary TLS materials and disposable cloud nodes.
+
+GitOps declares only non-sensitive roles, versions, instance shapes and test
+CIDRs. It never contains VLESS identities, TLS private material, WireGuard
+private keys or rendered peer configuration. Those values must not be emitted
+to logs, artifacts or the Portal.
+
+| Node | Automated runtime | Required evidence |
+| --- | --- | --- |
+| Linux Gateway | VLESS/TLS Xray server, WireGuard, One public peers, private HTTP marker | TCP/TLS listener, interface, exact peer handshakes |
+| Linux One | external `xray/tproxy`, WireGuard, Gateway peer | loopback relay, interface, handshake, ping/HTTP |
+| Windows One | external `xray/tproxy`, WireGuard for Windows, Gateway peer | same as Linux on a disposable Spot node |
+| macOS One | external `xray/tproxy`, `wireguard-go`/WireGuard, Gateway peer | same as Linux with explicit local/admin authorization |
 
 ## Control plane
 
@@ -160,3 +209,10 @@ extension, not a replacement for the standalone three-platform One data plane.
 
 A process status or ACK proves neither a current WireGuard handshake nor private
 reachability. A successful UAT result requires each applicable row.
+
+## Phase 1: replace the lab input with Zero
+
+Once the transport lab passes, Accounts becomes the only source of the same
+runtime inputs: owner-scoped network selection, enrollment, signed config,
+policy and revocation. Gateway and One then verify those inputs and ACK applied
+generations; the transport topology and platform ownership above do not change.

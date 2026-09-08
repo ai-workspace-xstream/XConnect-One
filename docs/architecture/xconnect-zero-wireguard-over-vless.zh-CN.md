@@ -87,6 +87,21 @@ VLESS 身份、WireGuard 私钥与实际 peer 配置不进入 GitOps、日志、
 macOS 不能由普通 GitHub hosted runner 代替：它需要可执行受控的本机管理员操作。
 流水线应将 macOS 步骤建模为显式 opt-in，而不是伪造“已自动验证”。
 
+四节点实验室使用固定但仅限本次 run 的地址约定，便于精确校验和自动清理：
+
+| 节点 | 私网地址 | 运行位置 |
+| --- | --- | --- |
+| Gateway | `10.77.0.1/24` | AWS `t4g.small` Spot |
+| Linux One | `10.77.0.2/24` | AWS `t4g.micro` Spot |
+| Windows One | `10.77.0.3/24` | AWS Windows Spot |
+| macOS One | `10.77.0.4/24` | 本机或受控 macOS runner |
+
+Gateway 的 WireGuard 配置只包含三个 `/32` peer，启用 IPv4 转发；三个 One 的
+`AllowedIPs` 为实验室私网 CIDR。Gateway 的公网 `443/TCP` 是唯一传输入口，
+每个 One 都通过自己的 loopback Xray relay 访问它；不开放公网 UDP `51820`。
+验收必须包括 One→Gateway 以及任意已加入 One↔One 的双向私网 ping/HTTP，不能
+只验证 Gateway 自身可达。
+
 ## 5. 第二阶段：控制面链路
 
 ```text

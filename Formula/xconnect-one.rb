@@ -6,11 +6,11 @@ class XconnectOne < Formula
 
   on_macos do
     if Hardware::CPU.arm?
-      url "https://github.com/ai-workspace-xstream/XConnect-One/releases/download/v0.1.9/xconnect-macos-arm64"
-      sha256 "f934c3e6c9f5de73df22e64763bb90a658c7bbd1f86c93bf897569e02e0607a9"
+      url "https://github.com/ai-workspace-xstream/XConnect-One/releases/download/v0.1.10/xconnect-macos-arm64"
+      sha256 "469e836f602501e464ff795526a92c50c9ee163b5e1a3d114d82c5c818bdeaf8"
     else
-      url "https://github.com/ai-workspace-xstream/XConnect-One/releases/download/v0.1.9/xconnect-macos-amd64"
-      sha256 "42e1d1e03223186140a2cf3ef59f5909c68eb3d5839209365295cee113c7467c"
+      url "https://github.com/ai-workspace-xstream/XConnect-One/releases/download/v0.1.10/xconnect-macos-amd64"
+      sha256 "c7815322d5ae96d6d1625ece78a03e7ba4f10f422d6fa1983acc9e2dd1516117"
     end
   end
 

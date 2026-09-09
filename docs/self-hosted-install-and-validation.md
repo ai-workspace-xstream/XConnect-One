@@ -11,7 +11,7 @@ XConnect APP，也不实现 macOS host adapter / Packet Tunnel handoff。
 
 ```sh
 curl -fsSL https://install.svc.plus/xconnect-one | \
-  XCONNECT_ONE_VERSION=v0.1.9 bash
+  XCONNECT_ONE_VERSION=v0.1.10 bash
 ```
 
 环境变量放在管道右侧，才会传给安装脚本；不要把版本号放在
@@ -37,7 +37,7 @@ brew install --formula \
 Windows 在管理员 PowerShell 中执行：
 
 ```powershell
-$env:XCONNECT_ONE_VERSION = 'v0.1.9'
+$env:XCONNECT_ONE_VERSION = 'v0.1.10'
 irm https://install.svc.plus/xconnect-one.ps1 | iex
 ```
 

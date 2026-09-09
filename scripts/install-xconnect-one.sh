@@ -52,7 +52,9 @@ else
   die 'sha256sum or shasum is required'
 fi
 
-if [[ -w "$install_dir" || -e "$install_dir" && -w "$install_dir" ]]; then
+install_parent="$(dirname "$install_dir")"
+if [[ -d "$install_dir" && -w "$install_dir" ]] ||
+  [[ ! -e "$install_dir" && -d "$install_parent" && -w "$install_parent" ]]; then
   install -d -m 0755 "$install_dir"
   install -m 0755 "$tmp_dir/$asset" "$install_dir/xconnect"
 else

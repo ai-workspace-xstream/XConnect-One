@@ -68,6 +68,7 @@ type desktopBackend interface {
 // mutate host networking. Linux uses wg-quick; Windows maps the same logical
 // operations to WireGuard for Windows tunnel services.
 type Desktop struct {
+	stateDirectory   string
 	dir              string
 	backend          desktopBackend
 	commandTimeout   time.Duration
@@ -111,7 +112,9 @@ func (r *Desktop) wireGuardServiceState(interfaceName, executable, configPath st
 }
 
 func newDesktop(stateDirectory string, backend desktopBackend) *Desktop {
+	stateDirectory = filepath.Clean(stateDirectory)
 	return &Desktop{
+		stateDirectory:   stateDirectory,
 		dir:              filepath.Join(stateDirectory, "runtime"),
 		backend:          backend,
 		commandTimeout:   10 * time.Second,
@@ -227,13 +230,19 @@ func (r *Desktop) Apply(ctx context.Context, request ApplyRequest) (ApplyResult,
 func (r *Desktop) Status(ctx context.Context) (Status, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	result := Status{}
+	if managed, ok := loadManagedRuntimeManifest(r.stateDirectory); ok {
+		result.ManagedRuntime = true
+		result.RuntimeVersion = managed.XrayVersion
+	}
 	dependencies, err := r.dependencies()
 	if err != nil || !r.backend.Privileged() {
-		return Status{Available: false}, nil
+		return result, nil
 	}
+	result.Available = true
 	manifest, err := r.loadManifest(r.activeManifestPath())
 	if errors.Is(err, errRuntimeArtifactNotFound) {
-		return Status{Available: true}, nil
+		return result, nil
 	}
 	if err != nil {
 		return Status{}, err
@@ -251,14 +260,12 @@ func (r *Desktop) Status(ctx context.Context) (Status, error) {
 	if healthErr != nil && fault.Code(healthErr) != fault.CodeRuntimeProcessStale {
 		return Status{}, healthErr
 	}
-	return Status{
-		Available: true,
-		Applied:   healthy,
-		Revision:  manifest.Revision,
-		CoreID:    manifest.CoreID,
-		AdapterID: manifest.AdapterID,
-		Interface: interfaceName,
-	}, nil
+	result.Applied = healthy
+	result.Revision = manifest.Revision
+	result.CoreID = manifest.CoreID
+	result.AdapterID = manifest.AdapterID
+	result.Interface = interfaceName
+	return result, nil
 }
 
 // Down stops only the process and interface described by trusted XConnect
@@ -343,7 +350,7 @@ func (r *Desktop) Cleanup(context.Context) error {
 func (r *Desktop) Diagnose(ctx context.Context) ([]Diagnostic, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	xrayPath, xrayErr := r.backend.LookPath("xray")
+	xrayPath, xrayErr := r.lookupXray()
 	wgPath, wgErr := r.backend.LookPath("wg")
 	_, wgQuickErr := r.backend.LookPath("wg-quick")
 	diagnostics := []Diagnostic{
@@ -393,7 +400,7 @@ type desktopDependencies struct {
 }
 
 func (r *Desktop) dependencies() (desktopDependencies, error) {
-	xray, err := r.backend.LookPath("xray")
+	xray, err := r.lookupXray()
 	if err != nil {
 		return desktopDependencies{}, fault.New(fault.CodeRuntimeDependency, "locate Xray runtime", nil)
 	}
@@ -406,6 +413,13 @@ func (r *Desktop) dependencies() (desktopDependencies, error) {
 		return desktopDependencies{}, fault.New(fault.CodeRuntimeDependency, "locate WireGuard runtime", nil)
 	}
 	return desktopDependencies{xray: xray, wg: wg, wgQuick: wgQuick}, nil
+}
+
+func (r *Desktop) lookupXray() (string, error) {
+	if managed, ok := resolveManagedXray(r.stateDirectory); ok {
+		return managed, nil
+	}
+	return r.backend.LookPath("xray")
 }
 
 func (r *Desktop) prepare(request ApplyRequest, xrayPath string) (desktopManifest, error) {

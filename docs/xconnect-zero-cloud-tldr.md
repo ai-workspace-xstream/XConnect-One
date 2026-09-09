@@ -15,13 +15,13 @@ curl -fsSL https://install.svc.plus/xconnect-gateway | \
 
 # One（Linux 或 macOS）
 curl -fsSL https://install.svc.plus/xconnect-one | \
-  XCONNECT_ONE_VERSION=v0.1.10 bash
+  XCONNECT_ONE_VERSION=v0.1.11 bash
 ```
 
 Windows 使用管理员 PowerShell：
 
 ```powershell
-$env:XCONNECT_ONE_VERSION = 'v0.1.10'
+$env:XCONNECT_ONE_VERSION = 'v0.1.11'
 irm https://install.svc.plus/xconnect-one.ps1 | iex
 ```
 

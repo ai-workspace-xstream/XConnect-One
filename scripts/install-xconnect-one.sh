@@ -7,7 +7,7 @@ umask 022
 # can be pointed at an approved mirror for private GitHub repositories.
 
 readonly RELEASE_REPOSITORY="ai-workspace-xstream/XConnect-One"
-readonly DEFAULT_VERSION="v0.1.10"
+readonly DEFAULT_VERSION="v0.1.11"
 version="${XCONNECT_ONE_VERSION:-$DEFAULT_VERSION}"
 install_dir="${XCONNECT_ONE_INSTALL_DIR:-/usr/local/bin}"
 release_base="${XCONNECT_ONE_RELEASE_BASE_URL:-https://github.com/${RELEASE_REPOSITORY}/releases/download}"

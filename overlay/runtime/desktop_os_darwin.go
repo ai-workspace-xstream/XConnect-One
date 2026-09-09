@@ -39,7 +39,7 @@ func newOSDesktopBackend() *osDesktopBackend {
 }
 
 func (b *osDesktopBackend) LookPath(name string) (string, error) {
-	path, err := exec.LookPath(name)
+	path, err := lookPathDarwinRuntime(name)
 	if err != nil {
 		return "", err
 	}

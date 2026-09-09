@@ -46,10 +46,11 @@ and vet, and publishes their controlled-client binaries. Tests use HTTP
 fixtures and injected runtime backends; they do not establish a live VPN or
 change the host network.
 
-## Linux prerequisites
+## Managed runtime bootstrap
 
-Starting with v0.1.10, supported Debian/Ubuntu Linux hosts can explicitly
-bootstrap the approved managed Xray runtime and required WireGuard packages:
+Starting with v0.1.10 on Linux and v0.1.11 on macOS/Windows, controlled clients
+can explicitly bootstrap the approved managed Xray runtime and required
+WireGuard packages:
 
 ```sh
 sudo /usr/local/bin/xconnect runtime bootstrap --state-dir /var/lib/xconnect-one
@@ -57,16 +58,16 @@ sudo /usr/local/bin/xconnect join --bootstrap --state-dir /var/lib/xconnect-one 
   'xconnect://join/REPLACE_WITH_SHORT_LIVED_INVITE'
 ```
 
-Bootstrap is never implicit: it requires root and either the explicit
+Bootstrap is never implicit: it requires administrator privileges and either the explicit
 `runtime bootstrap` command or `join/sync --bootstrap`. The downloaded Xray
 archive is pinned and checksum-verified; its executable stays under the
-One-owned state directory. macOS and Windows keep the same CLI flag but reject
-managed bootstrap until their platform adapters are released.
+One-owned state directory. Debian/Ubuntu uses `apt`, macOS uses a trusted
+user-owned Homebrew installation for `wireguard-tools` and `wireguard-go`, and
+Windows uses `winget` for WireGuard for Windows when it is missing.
 
-Install compatible `xray`, `wg`, and `wg-quick` executables in a trusted `PATH`.
-Xray must support VLESS/TLS, XUDP and a UDP `dokodemo-door` inbound. It is an
-external executable, not linked into this binary; no Xray version has been
-certified by this extraction. The runtime checks generated configuration using
+When bootstrap is disabled, compatible `xray`, `wg`, and `wg-quick` executables
+must already exist in a trusted `PATH`. Xray remains an external process rather
+than a linked library. The runtime checks every generated configuration using
 `xray run -test -config` before activation.
 
 The host needs WireGuard kernel support, the tools used by `wg-quick` (including
@@ -95,8 +96,9 @@ XConnect APP host adapter or Packet Tunnel handoff.
 其中的 `curl https://install.svc.plus/xconnect-one | bash` 入口只安装
 One CLI；Xray、WireGuard 和 Zero 邀请仍由节点管理员分别提供。
 
-Install compatible external `xray`, `wg`, `wg-quick`, and `wireguard-go`, plus
-WireGuard userspace support (for example the supported Homebrew toolchain).
+Run `runtime bootstrap` to install the checksum-pinned managed Xray and verify
+the external `wg`, `wg-quick`, and `wireguard-go` tools. On macOS the supported
+Homebrew toolchain is installed as the Homebrew owner rather than root.
 Build the binary for
 the host architecture, then install the checked release binary on the command
 path before enrollment:

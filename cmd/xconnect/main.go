@@ -466,7 +466,7 @@ func runRuntime(ctx context.Context, args []string, stdout, stderr io.Writer) er
 	flags.SetOutput(stderr)
 	stateDirectory := flags.String("state-dir", defaultStateDirectory(), "local XConnect-One state directory")
 	releaseBaseURL := flags.String("release-base-url", os.Getenv("XCONNECT_RUNTIME_RELEASE_BASE_URL"), "approved Xray release mirror base URL")
-	installSystemPackages := flags.Bool("install-system-packages", true, "install required WireGuard packages on supported Linux distributions")
+	installSystemPackages := flags.Bool("install-system-packages", true, "install required WireGuard packages using the supported platform package manager")
 	if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 {
 		return fault.New(fault.CodeInvalidInput, "parse runtime bootstrap arguments", err)
 	}

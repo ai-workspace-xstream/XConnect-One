@@ -3,13 +3,11 @@
 package runtime
 
 import (
-	"archive/zip"
 	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -110,31 +108,4 @@ func TestBootstrapLinuxRejectsArchiveChecksumMismatch(t *testing.T) {
 	if fault.Code(err) != fault.CodeRuntimeDependency {
 		t.Fatalf("error=%v code=%q", err, fault.Code(err))
 	}
-}
-
-type httpHandler func([]byte) []byte
-
-func (handler httpHandler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
-	raw := handler(nil)
-	writer.Header().Set("Content-Type", "application/zip")
-	_, _ = writer.Write(raw)
-}
-
-func testXrayArchive(t *testing.T, binary []byte) []byte {
-	t.Helper()
-	var buffer bytes.Buffer
-	writer := zip.NewWriter(&buffer)
-	header := &zip.FileHeader{Name: "xray", Method: zip.Store}
-	header.SetMode(0o755)
-	file, err := writer.CreateHeader(header)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := file.Write(binary); err != nil {
-		t.Fatal(err)
-	}
-	if err := writer.Close(); err != nil {
-		t.Fatal(err)
-	}
-	return buffer.Bytes()
 }

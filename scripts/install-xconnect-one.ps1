@@ -5,7 +5,7 @@ $ErrorActionPreference = 'Stop'
 # are private; the mirror must expose the same asset and SHA256SUMS contract.
 
 $repository = 'ai-workspace-xstream/XConnect-One'
-$version = if ($env:XCONNECT_ONE_VERSION) { $env:XCONNECT_ONE_VERSION } else { 'v0.1.10' }
+$version = if ($env:XCONNECT_ONE_VERSION) { $env:XCONNECT_ONE_VERSION } else { 'v0.1.11' }
 $installDir = if ($env:XCONNECT_ONE_INSTALL_DIR) { $env:XCONNECT_ONE_INSTALL_DIR } else { Join-Path $env:ProgramFiles 'XConnect' }
 $releaseBase = if ($env:XCONNECT_ONE_RELEASE_BASE_URL) { $env:XCONNECT_ONE_RELEASE_BASE_URL } else { "https://github.com/$repository/releases/download" }
 

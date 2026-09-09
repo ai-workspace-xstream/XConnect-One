@@ -67,7 +67,7 @@ func runWithRuntimeFactory(ctx context.Context, args []string, stdout, stderr io
 
 func runWithFactories(ctx context.Context, args []string, stdout, stderr io.Writer, httpClient *http.Client, newRuntime runtimeFactory, newCredentials credentialFactory) error {
 	if len(args) == 0 {
-		return fault.New(fault.CodeInvalidInput, "expected register, join, sync, up, down, leave, status, diagnose, credential, admin, or policy", nil)
+		return fault.New(fault.CodeInvalidInput, "expected register, join, sync, up, down, leave, status, diagnose, runtime, credential, admin, or policy", nil)
 	}
 	switch args[0] {
 	case "register":
@@ -86,6 +86,8 @@ func runWithFactories(ctx context.Context, args []string, stdout, stderr io.Writ
 		return runStatus(ctx, args[1:], stdout, stderr, newRuntime, newCredentials)
 	case "diagnose":
 		return runDiagnose(ctx, args[1:], stdout, stderr, newRuntime, newCredentials)
+	case "runtime":
+		return runRuntime(ctx, args[1:], stdout, stderr)
 	case "credential":
 		return runCredential(ctx, args[1:], stdout, stderr, httpClient, newRuntime, newCredentials)
 	case "admin":
@@ -140,6 +142,8 @@ func runJoin(ctx context.Context, args []string, stdout, stderr io.Writer, httpC
 	networkID := flags.String("network-id", "", "requested overlay network ID")
 	nodeID := flags.String("node-id", "", "preferred gateway node ID")
 	configContract := flags.String("config-contract", string(usecase.ConfigContractAuto), "config contract: auto, signed, or legacy")
+	bootstrapRuntime := flags.Bool("bootstrap", false, "install or repair the approved managed runtime before joining")
+	runtimeReleaseBaseURL := flags.String("runtime-release-base-url", os.Getenv("XCONNECT_RUNTIME_RELEASE_BASE_URL"), "approved Xray release mirror base URL")
 	allowInsecureLocalhost := flags.Bool("allow-insecure-localhost", false, "allow HTTP localhost controller for invite development")
 	tokenFile := flags.String("token-file", "", "path to a file containing the accounts access token")
 	if err := flags.Parse(args); err != nil {
@@ -155,6 +159,16 @@ func runJoin(ctx context.Context, args []string, stdout, stderr io.Writer, httpC
 	target, err := resolveJoinTarget(targetValue, *server, *allowInsecureLocalhost)
 	if err != nil {
 		return err
+	}
+	if *bootstrapRuntime {
+		if _, err := overlayruntime.Bootstrap(ctx, overlayruntime.BootstrapOptions{
+			StateDirectory:        *stateDirectory,
+			ReleaseBaseURL:        *runtimeReleaseBaseURL,
+			InstallSystemPackages: true,
+		}); err != nil {
+			return err
+		}
+		_, _ = fmt.Fprintln(stderr, "xconnect: managed runtime ready")
 	}
 	if *networkID == "" {
 		*networkID = target.NetworkID
@@ -212,6 +226,8 @@ func runSync(ctx context.Context, args []string, stdout, stderr io.Writer, httpC
 	flags.SetOutput(stderr)
 	stateDirectory := flags.String("state-dir", defaultStateDirectory(), "local XConnect-One state directory")
 	signedConfigV2 := flags.Bool("signed-config-v2", false, "request the policy-bound SignedConfig v2 contract")
+	bootstrapRuntime := flags.Bool("bootstrap", false, "install or repair the approved managed runtime before synchronizing")
+	runtimeReleaseBaseURL := flags.String("runtime-release-base-url", os.Getenv("XCONNECT_RUNTIME_RELEASE_BASE_URL"), "approved Xray release mirror base URL")
 	if err := flags.Parse(args); err != nil || flags.NArg() != 0 {
 		return fault.New(fault.CodeInvalidInput, "parse sync arguments", err)
 	}
@@ -222,6 +238,16 @@ func runSync(ctx context.Context, args []string, stdout, stderr io.Writer, httpC
 	}
 	if err != nil {
 		return err
+	}
+	if *bootstrapRuntime {
+		if _, err := overlayruntime.Bootstrap(ctx, overlayruntime.BootstrapOptions{
+			StateDirectory:        *stateDirectory,
+			ReleaseBaseURL:        *runtimeReleaseBaseURL,
+			InstallSystemPackages: true,
+		}); err != nil {
+			return err
+		}
+		_, _ = fmt.Fprintln(stderr, "xconnect: managed runtime ready")
 	}
 	client, err := controlplane.New(record.Controller, "", httpClient)
 	if err != nil {
@@ -426,6 +452,29 @@ func runDiagnose(ctx context.Context, args []string, stdout, stderr io.Writer, n
 	}
 	store := state.NewStore(*stateDirectory)
 	result, err := usecase.DiagnoseWithCredential(ctx, store, newRuntime(*stateDirectory), newCredentials(*stateDirectory))
+	if err != nil {
+		return err
+	}
+	return writeJSON(stdout, result)
+}
+
+func runRuntime(ctx context.Context, args []string, stdout, stderr io.Writer) error {
+	if len(args) == 0 || args[0] != "bootstrap" {
+		return fault.New(fault.CodeInvalidInput, "expected runtime bootstrap", nil)
+	}
+	flags := flag.NewFlagSet("xconnect runtime bootstrap", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	stateDirectory := flags.String("state-dir", defaultStateDirectory(), "local XConnect-One state directory")
+	releaseBaseURL := flags.String("release-base-url", os.Getenv("XCONNECT_RUNTIME_RELEASE_BASE_URL"), "approved Xray release mirror base URL")
+	installSystemPackages := flags.Bool("install-system-packages", true, "install required WireGuard packages on supported Linux distributions")
+	if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 {
+		return fault.New(fault.CodeInvalidInput, "parse runtime bootstrap arguments", err)
+	}
+	result, err := overlayruntime.Bootstrap(ctx, overlayruntime.BootstrapOptions{
+		StateDirectory:        *stateDirectory,
+		ReleaseBaseURL:        *releaseBaseURL,
+		InstallSystemPackages: *installSystemPackages,
+	})
 	if err != nil {
 		return err
 	}

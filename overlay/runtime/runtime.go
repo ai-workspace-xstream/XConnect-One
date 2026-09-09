@@ -20,12 +20,14 @@ type ApplyResult struct {
 }
 
 type Status struct {
-	Available bool   `json:"available"`
-	Applied   bool   `json:"applied"`
-	Revision  string `json:"revision,omitempty"`
-	CoreID    string `json:"core_id,omitempty"`
-	AdapterID string `json:"adapter_id,omitempty"`
-	Interface string `json:"interface,omitempty"`
+	Available      bool   `json:"available"`
+	Applied        bool   `json:"applied"`
+	ManagedRuntime bool   `json:"managed_runtime"`
+	RuntimeVersion string `json:"runtime_version,omitempty"`
+	Revision       string `json:"revision,omitempty"`
+	CoreID         string `json:"core_id,omitempty"`
+	AdapterID      string `json:"adapter_id,omitempty"`
+	Interface      string `json:"interface,omitempty"`
 }
 
 type Diagnostic struct {

@@ -48,6 +48,21 @@ change the host network.
 
 ## Linux prerequisites
 
+Starting with v0.1.10, supported Debian/Ubuntu Linux hosts can explicitly
+bootstrap the approved managed Xray runtime and required WireGuard packages:
+
+```sh
+sudo /usr/local/bin/xconnect runtime bootstrap --state-dir /var/lib/xconnect-one
+sudo /usr/local/bin/xconnect join --bootstrap --state-dir /var/lib/xconnect-one \
+  'xconnect://join/REPLACE_WITH_SHORT_LIVED_INVITE'
+```
+
+Bootstrap is never implicit: it requires root and either the explicit
+`runtime bootstrap` command or `join/sync --bootstrap`. The downloaded Xray
+archive is pinned and checksum-verified; its executable stays under the
+One-owned state directory. macOS and Windows keep the same CLI flag but reject
+managed bootstrap until their platform adapters are released.
+
 Install compatible `xray`, `wg`, and `wg-quick` executables in a trusted `PATH`.
 Xray must support VLESS/TLS, XUDP and a UDP `dokodemo-door` inbound. It is an
 external executable, not linked into this binary; no Xray version has been

@@ -57,6 +57,31 @@ Xray 必须支持 VLESS/TLS、XUDP 和 UDP `dokodemo-door`。One 生成的 WireG
 peer Endpoint 指向本机 Xray 的 UDP loopback 入口；不要把 Gateway 的公网
 WireGuard UDP 端口写进 One 配置。
 
+### v0.1.10 Linux 受管 bootstrap
+
+Debian/Ubuntu Linux 可以让 One 显式准备运行时：
+
+```sh
+sudo /usr/local/bin/xconnect runtime bootstrap \
+  --state-dir /var/lib/xconnect-one
+```
+
+该命令会通过系统包管理器安装缺失的 `wireguard-tools` / `iproute2`，从固定的
+Xray Release 下载与架构匹配的归档，校验内置 sha256，并将 Xray 安装到
+`/var/lib/xconnect-one/managed-runtime/bin/xray`。manifest 和生成配置留在
+One 自己的受保护目录。
+
+也可以把显式 bootstrap 与首次加入合成一条命令：
+
+```sh
+sudo /usr/local/bin/xconnect join --bootstrap \
+  --state-dir /var/lib/xconnect-one \
+  'xconnect://join/REPLACE_WITH_SHORT_LIVED_INVITE'
+```
+
+`--bootstrap` 不会静默启用；macOS/Windows 在各自受管 adapter 发布前会明确返回
+runtime unavailable，继续使用已安装的外部运行时。
+
 ## 自建加入
 
 使用 Zero Portal 生成针对具体网络、平台和设备 ID 的短期邀请。邀请只交互输入，

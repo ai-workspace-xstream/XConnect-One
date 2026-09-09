@@ -45,19 +45,20 @@ Windows 默认安装到 `%ProgramFiles%\XConnect\xconnect-windows-amd64.exe`。�
 只下载精确平台制品、读取同版本 `SHA256SUMS` 并在复制前校验；它不会写入 Zero
 邀请、设备凭据或私钥。
 
-## 外部运行时
+## 受管运行时
 
-One 不内置 Xray 或 WireGuard。自建节点需要预先安装：
+One CLI 不静态链接 Xray 或 WireGuard，但可以通过显式 bootstrap 准备受管 Xray
+并安装或验证平台 WireGuard 工具：
 
-- Linux：`xray`、`wg`、`wg-quick` 和 WireGuard 内核支持；
-- macOS：外部 `xray`、`wg`、`wg-quick`、`wireguard-go`；
-- Windows：外部 `xray.exe`、`wg.exe`、`wireguard.exe`，并以管理员权限运行。
+- Linux：受管 Xray、`wg`、`wg-quick` 和 WireGuard 内核支持；
+- macOS：受管 Xray，Homebrew `wireguard-tools`、`wireguard-go`；
+- Windows：受管 `xray.exe`、WireGuard for Windows，并以管理员 PowerShell 运行。
 
 Xray 必须支持 VLESS/TLS、XUDP 和 UDP `dokodemo-door`。One 生成的 WireGuard
 peer Endpoint 指向本机 Xray 的 UDP loopback 入口；不要把 Gateway 的公网
 WireGuard UDP 端口写进 One 配置。
 
-### v0.1.10 Linux 受管 bootstrap
+### 跨平台受管 bootstrap
 
 Debian/Ubuntu Linux 可以让 One 显式准备运行时：
 
@@ -66,10 +67,10 @@ sudo /usr/local/bin/xconnect runtime bootstrap \
   --state-dir /var/lib/xconnect-one
 ```
 
-该命令会通过系统包管理器安装缺失的 `wireguard-tools` / `iproute2`，从固定的
-Xray Release 下载与架构匹配的归档，校验内置 sha256，并将 Xray 安装到
-`/var/lib/xconnect-one/managed-runtime/bin/xray`。manifest 和生成配置留在
-One 自己的受保护目录。
+该命令从固定 Xray Release 下载与平台/架构匹配的归档并校验内置 SHA256。
+Linux 使用 apt 安装 WireGuard 工具；macOS 以 Homebrew 所属普通用户安装
+`wireguard-tools` 和 `wireguard-go`；Windows 使用 winget 安装 WireGuard for
+Windows。受管 Xray、manifest 和生成配置只保存在 One 的受保护状态目录。
 
 也可以把显式 bootstrap 与首次加入合成一条命令：
 
@@ -79,8 +80,8 @@ sudo /usr/local/bin/xconnect join --bootstrap \
   'xconnect://join/REPLACE_WITH_SHORT_LIVED_INVITE'
 ```
 
-`--bootstrap` 不会静默启用；macOS/Windows 在各自受管 adapter 发布前会明确返回
-runtime unavailable，继续使用已安装的外部运行时。
+`--bootstrap` 不会静默启用。缺少管理员权限、受信任包管理器或校验不匹配时均
+会停止，不会继续应用网络配置。
 
 ## 自建加入
 

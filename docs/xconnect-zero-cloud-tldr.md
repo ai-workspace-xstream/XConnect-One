@@ -83,10 +83,10 @@ sudo "$XCONNECT_BIN" down --state-dir /var/lib/xconnect-one
 当前 CLI 不支持以离线缓存配置重新 `up`；停止后应使用 `sync` 重新验证签名
 配置并启动。
 
-### v0.1.10 Linux 快速接入
+### Linux / macOS / Windows 快速接入
 
-在受支持的 Debian/Ubuntu Linux 上，One 可以显式完成受管运行时准备并加入
-Gateway，无需手工编写 Xray/WireGuard 配置：
+One 可以显式完成受管运行时准备并加入 Gateway，无需手工编写
+Xray/WireGuard 配置：
 
 ```sh
 sudo /usr/local/bin/xconnect join --bootstrap \
@@ -94,9 +94,15 @@ sudo /usr/local/bin/xconnect join --bootstrap \
   'xconnect://join/SHORT_LIVED_INVITE'
 ```
 
-该路径固定并校验 Xray 归档，安装缺失的系统 WireGuard 工具，并只管理
-`/var/lib/xconnect-one` 下的 One 运行时。macOS/Windows 受管 bootstrap 仍按后续
-平台阶段实现。
+该路径固定并校验 Xray 归档，使用平台受支持的包管理器安装缺失的 WireGuard
+工具，并只管理 One 自己状态目录下的运行时。Windows 在管理员 PowerShell 中
+使用同样的 `join --bootstrap`；macOS 使用 `sudo` 执行。
+
+```powershell
+& "$env:ProgramFiles\XConnect\xconnect-windows-amd64.exe" join --bootstrap `
+  --state-dir "$env:ProgramData\XConnect-One" `
+  'xconnect://join/SHORT_LIVED_INVITE'
+```
 
 ## Gateway
 

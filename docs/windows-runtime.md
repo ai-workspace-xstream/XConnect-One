@@ -11,13 +11,14 @@ standard `[Interface]`/`[Peer]` format used by the Linux runtime.
 
 - Run `xconnect.exe` from an elevated Builtin Administrators process. The
   runtime refuses to apply, stop, or clean up without an elevated token.
-- Install a native `amd64` WireGuard for Windows package that provides
+- Run `xconnect runtime bootstrap` from an administrator PowerShell to install
+  or verify a native `amd64` WireGuard for Windows package that provides
   `wireguard.exe` and `wg.exe`. The CLI searches `PATH`, then the standard
   `%ProgramFiles%\WireGuard\` directory.
-- Install a compatible native `amd64` `xray.exe` and make it available on
-  `PATH`. Xray must support the VLESS/TLS, XUDP and UDP `dokodemo-door`
-  settings emitted by this repository. The binary is not bundled or pinned by
-  XConnect-One.
+- Bootstrap downloads the pinned native `amd64` `xray.exe`, verifies its
+  SHA256, and stores it beneath the protected One state directory. Xray must
+  support the VLESS/TLS, XUDP and UDP `dokodemo-door` settings emitted by this
+  repository.
 - Use a dedicated local NTFS state directory. The runtime protects its
   generated directories and files with a protected DACL granting full access
   only to Local System, the owning operator, and Builtin Administrators. The

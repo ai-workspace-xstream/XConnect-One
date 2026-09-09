@@ -75,6 +75,11 @@ XConnect APP host adapter or Packet Tunnel handoff.
 
 ## macOS prerequisites and installation
 
+面向自建节点的安装、加入和数据面验证见
+[docs/self-hosted-install-and-validation.md](docs/self-hosted-install-and-validation.md)。
+其中的 `curl https://install.svc.plus/xconnect-one | bash` 入口只安装
+One CLI；Xray、WireGuard 和 Zero 邀请仍由节点管理员分别提供。
+
 Install compatible external `xray`, `wg`, `wg-quick`, and `wireguard-go`, plus
 WireGuard userspace support (for example the supported Homebrew toolchain).
 Build the binary for

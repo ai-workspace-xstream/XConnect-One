@@ -145,6 +145,7 @@ func runJoin(ctx context.Context, args []string, stdout, stderr io.Writer, httpC
 	bootstrapRuntime := flags.Bool("bootstrap", false, "install or repair the approved managed runtime before joining")
 	runtimeReleaseBaseURL := flags.String("runtime-release-base-url", os.Getenv("XCONNECT_RUNTIME_RELEASE_BASE_URL"), "approved Xray release mirror base URL")
 	allowInsecureLocalhost := flags.Bool("allow-insecure-localhost", false, "allow HTTP localhost controller for invite development")
+	inviteFile := flags.String("invite-file", "", "path to a protected file containing one XConnect join URI")
 	tokenFile := flags.String("token-file", "", "path to a file containing the accounts access token")
 	if err := flags.Parse(args); err != nil {
 		return fault.New(fault.CodeInvalidInput, "parse join arguments", err)
@@ -155,6 +156,16 @@ func runJoin(ctx context.Context, args []string, stdout, stderr io.Writer, httpC
 	targetValue := ""
 	if flags.NArg() == 1 {
 		targetValue = flags.Arg(0)
+	}
+	if strings.TrimSpace(*inviteFile) != "" {
+		if targetValue != "" {
+			return fault.New(fault.CodeInvalidInput, "join accepts either an invite argument or --invite-file", nil)
+		}
+		var err error
+		targetValue, err = readJoinInvite(*inviteFile)
+		if err != nil {
+			return err
+		}
 	}
 	target, err := resolveJoinTarget(targetValue, *server, *allowInsecureLocalhost)
 	if err != nil {
@@ -495,6 +506,26 @@ func readToken(path string) (string, error) {
 		return "", fault.New(fault.CodeAuthenticationFailed, "read access token", err)
 	}
 	return strings.TrimSpace(string(raw)), nil
+}
+
+// readJoinInvite keeps a short-lived join URI out of the process argument
+// list. Deployment automation creates this file with 0600 permissions and
+// removes it immediately after a successful exchange.
+func readJoinInvite(path string) (string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return "", fault.New(fault.CodeJoinInviteInvalid, "read join invite", err)
+	}
+	defer file.Close()
+	raw, err := io.ReadAll(io.LimitReader(file, 16<<10))
+	if err != nil {
+		return "", fault.New(fault.CodeJoinInviteInvalid, "read join invite", err)
+	}
+	value := strings.TrimSpace(string(raw))
+	if value == "" {
+		return "", fault.New(fault.CodeJoinInviteInvalid, "read join invite", nil)
+	}
+	return value, nil
 }
 
 type joinTarget struct {

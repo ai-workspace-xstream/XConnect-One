@@ -149,6 +149,29 @@ func TestCLIInviteJoinUsesEnrollmentWithoutAccountTokenOrSecretOutput(t *testing
 	}
 }
 
+func TestCLIInviteJoinReadsProtectedInviteFile(t *testing.T) {
+	server, joinToken, _, exchangeCalls, ackCalls := newCLIInviteServer(t)
+	stateDirectory := t.TempDir()
+	invitePath := filepath.Join(t.TempDir(), "join-uri")
+	invite := "xconnect://join/" + joinToken + "?controller=" + url.QueryEscape(server.URL)
+	if err := os.WriteFile(invitePath, []byte(invite+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	if err := runWithRuntimeFactory(t.Context(), []string{
+		"join", "--invite-file", invitePath, "--allow-insecure-localhost", "--state-dir", stateDirectory, "--device-id", "dev_cli",
+	}, &stdout, &stderr, server.Client(), func(string) overlayruntime.Interface { return &overlayruntime.Fake{} }); err != nil {
+		t.Fatalf("invite-file join: %v", err)
+	}
+	if exchangeCalls.Load() != 1 || ackCalls.Load() != 1 {
+		t.Fatalf("exchange=%d ack=%d", exchangeCalls.Load(), ackCalls.Load())
+	}
+	if strings.Contains(stdout.String(), joinToken) || strings.Contains(stderr.String(), joinToken) {
+		t.Fatal("invite-file secret leaked in command output")
+	}
+}
+
 func TestProductionJoinFailsClosedWithoutPlatformRuntimeAndDoesNotAck(t *testing.T) {
 	// Never depend on installed tunnel tools or allow this production-path test
 	// to mutate networking when run as root on a provisioned Linux host.
